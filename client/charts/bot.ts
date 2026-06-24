@@ -10,9 +10,10 @@ export default (ctx: Context) => {
       options({ analytics }) {
         const data = analytics.userUsageRank
           .map(item => ({
-            name: `用户 ${item.userId}`,
+            name: item.userName || `用户 ${item.userId}`,
             value: item.dailyAverage,
             count: item.count,
+            userId: item.userId,
             topCommand: item.topCommand,
           }))
           .reverse()
@@ -21,6 +22,7 @@ export default (ctx: Context) => {
         return {
           tooltip: Tooltip.item<typeof data[number]>(({ data }) => {
             const output = [data.name]
+            output.push(`用户 ID：${data.userId}`)
             output.push(`最近调用：${data.count}`)
             output.push(`日均调用：${+data.value.toFixed(1)}`)
             if (data.topCommand) output.push(`常用指令：${data.topCommand}`)

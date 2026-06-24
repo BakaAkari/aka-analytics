@@ -6,6 +6,7 @@ declare module 'koishi' {
   interface Tables {
     'analytics.message': Analytics.Message
     'analytics.command': Analytics.Command
+    'analytics.user': Analytics.User
   }
 }
 
@@ -34,6 +35,7 @@ class Analytics extends DataService<Analytics.Payload> {
 
   private messages: Analytics.Message[] = []
   private commands: Analytics.Command[] = []
+  private users: Analytics.User[] = []
 
   constructor(ctx: Context, public config: Analytics.Config = {}) {
     super(ctx, 'analytics')
@@ -62,6 +64,16 @@ class Analytics extends DataService<Analytics.Payload> {
       primary: ['date', 'hour', 'name', 'selfId', 'userId', 'channelId', 'platform'],
     })
 
+    ctx.model.extend('analytics.user', {
+      userId: 'integer',
+      platform: 'string(63)',
+      platformUserId: 'string(255)',
+      userName: 'string(255)',
+      updatedAt: 'timestamp',
+    }, {
+      primary: ['userId'],
+    })
+
     ctx.on('exit', () => this.upload(true))
 
     ctx.on('dispose', async () => {
@@ -85,12 +97,14 @@ class Analytics extends DataService<Analytics.Payload> {
     })
 
     ctx.any().before('command/execute', ({ command, session }) => {
+      const userId = session.user['id'] || 0
       this.addAudit(this.commands, {
         ...this.createIndex(session),
         name: command.name,
-        userId: session.user['id'] || 0,
+        userId,
         channelId: session.channelId,
       })
+      this.addUserProfile(session, userId)
       this.upload()
     })
 
@@ -109,12 +123,45 @@ class Analytics extends DataService<Analytics.Payload> {
     }
   }
 
+  private getSessionUserName(session: Session) {
+    const event = session.event as any
+    const candidates = [
+      event.member?.name,
+      event.member?.nick,
+      event.user?.name,
+      (session as any).username,
+      (session as any).author?.name,
+      (session as any).author?.nickname,
+      (session.user as any)?.name,
+    ]
+    return candidates.find(value => typeof value === 'string' && value.trim())?.trim()
+  }
+
   private addAudit<T extends Analytics.Audit>(buffer: T[], index: Omit<T, 'count'>) {
     const audit = buffer.find(data => deepEqual(pick(data, Object.keys(index) as (keyof T)[]), index))
     if (audit) {
       audit.count += 1
     } else {
       buffer.push({ ...index, count: 1 } as T)
+    }
+  }
+
+  private addUserProfile(session: Session, userId: number) {
+    if (!userId) return
+    const userName = this.getSessionUserName(session)
+    if (!userName) return
+    const user = {
+      userId,
+      platform: session.platform,
+      platformUserId: session.userId,
+      userName,
+      updatedAt: new Date(),
+    }
+    const index = this.users.findIndex(item => item.userId === userId)
+    if (index >= 0) {
+      this.users[index] = user
+    } else {
+      this.users.push(user)
     }
   }
 
@@ -127,6 +174,12 @@ class Analytics extends DataService<Analytics.Payload> {
     buffer.splice(0)
   }
 
+  private async uploadUsers() {
+    if (!this.users.length) return
+    await this.ctx.database.upsert('analytics.user', this.users)
+    this.users.splice(0)
+  }
+
   async upload(forced = false) {
     const date = new Date()
     const dateHour = date.getHours()
@@ -136,6 +189,7 @@ class Analytics extends DataService<Analytics.Payload> {
       await Promise.all([
         this.uploadAudit('analytics.message', this.messages),
         this.uploadAudit('analytics.command', this.commands),
+        this.uploadUsers(),
       ])
       logger.debug('analytics updated')
     }
@@ -184,7 +238,7 @@ class Analytics extends DataService<Analytics.Payload> {
   }
 
   private async getUserUsageRank(lengthTask: Promise<number>) {
-    const [usageData, commandData, length] = await Promise.all([
+    const [usageData, commandData, users, koishiUsers, length] = await Promise.all([
       this.ctx.database
         .select('analytics.command', {
           date: this.queryRecent(),
@@ -203,6 +257,8 @@ class Analytics extends DataService<Analytics.Payload> {
           count: row => $.sum(row.count),
         })
         .execute(),
+      this.ctx.database.select('analytics.user').execute(),
+      this.ctx.database.select('user').execute(),
       lengthTask,
     ])
 
@@ -214,11 +270,20 @@ class Analytics extends DataService<Analytics.Payload> {
       }
     })
 
+    const userNames = {} as Dict<string>
+    koishiUsers.forEach((user) => {
+      if (user.name) userNames[user.id] = user.name
+    })
+    users.forEach((user) => {
+      if (user.userName) userNames[user.userId] = user.userName
+    })
+
     return usageData
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
       .map(stat => ({
         userId: stat.userId,
+        userName: userNames[stat.userId],
         count: stat.count,
         dailyAverage: stat.count / length,
         topCommand: topCommands[stat.userId]?.name,
@@ -348,6 +413,14 @@ namespace Analytics {
     count: number
   }
 
+  export interface User {
+    userId: number
+    platform: string
+    platformUserId: string
+    userName: string
+    updatedAt: Date
+  }
+
   export interface Payload {
     userCount: number
     userIncrement: number
@@ -362,6 +435,7 @@ namespace Analytics {
 
   export interface UserUsage {
     userId: number
+    userName?: string
     count: number
     dailyAverage: number
     topCommand?: string

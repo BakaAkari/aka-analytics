@@ -6,12 +6,13 @@
 
 ## 当前状态
 
-`0.2.0` 在官方 `@koishijs/plugin-analytics` 替代基线上，将低价值的单平台消息占比卡片替换为用户用量排行，继续复用既有 `analytics.command` 历史数据。
+`0.2.1` 在官方 `@koishijs/plugin-analytics` 替代基线上，将低价值的单平台消息占比卡片替换为用户用量排行，并优先显示已采集到的 Lark 用户名。
 
 ## 使用要求
 
 - 启用本插件前需要关闭官方 `@koishijs/plugin-analytics`。
 - 本插件继续注册 Console service `analytics`，并继续使用 `analytics.message` 与 `analytics.command` 表，目的是完全替代官方插件并兼容既有统计数据。
+- 用户用量排行会额外维护 `analytics.user` 用户资料映射表；配合 `aka-adapter-lark` 的用户资料补全能力时，可显示 Lark 用户名。
 - 同时启用官方插件会发生 service、首页 slot、数据库写入重复等冲突，不支持。
 
 ## 首版统计范围
