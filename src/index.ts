@@ -1,4 +1,4 @@
-import { $, Context, deepEqual, Dict, Logger, pick, Query, Row, Schema, Session, Time, Universal } from 'koishi'
+import { $, Context, deepEqual, Dict, Logger, pick, Query, Row, Schema, Session, Time } from 'koishi'
 import { DataService } from '@koishijs/console'
 import { resolve } from 'path'
 
@@ -183,26 +183,46 @@ class Analytics extends DataService<Analytics.Payload> {
     return result
   }
 
-  private async getMessageByBot(lengthTask: Promise<number>) {
-    const data = await this.ctx.database
-      .select('analytics.message', {
-        date: this.queryRecent(),
-      })
-      .groupBy(['type', 'platform', 'selfId'], {
-        count: row => $.sum(row.count),
-      })
-      .execute()
-    const length = await lengthTask
-    const result = {} as Dict<Dict<MessageStats & Universal.User>>
-    data.forEach((stat) => {
-      const entry = (result[stat.platform] ||= {})[stat.selfId] ||= {
-        ...this.ctx.bots[`${stat.platform}:${stat.selfId}`]?.user,
-        send: 0,
-        receive: 0,
+  private async getUserUsageRank(lengthTask: Promise<number>) {
+    const [usageData, commandData, length] = await Promise.all([
+      this.ctx.database
+        .select('analytics.command', {
+          date: this.queryRecent(),
+          userId: { $gt: 0 },
+        })
+        .groupBy(['userId'], {
+          count: row => $.sum(row.count),
+        })
+        .execute(),
+      this.ctx.database
+        .select('analytics.command', {
+          date: this.queryRecent(),
+          userId: { $gt: 0 },
+        })
+        .groupBy(['userId', 'name'], {
+          count: row => $.sum(row.count),
+        })
+        .execute(),
+      lengthTask,
+    ])
+
+    const topCommands = {} as Dict<{ name: string, count: number }>
+    commandData.forEach((stat) => {
+      const current = topCommands[stat.userId]
+      if (!current || stat.count > current.count) {
+        topCommands[stat.userId] = { name: stat.name, count: stat.count }
       }
-      entry[stat.type] = stat.count / length
     })
-    return result
+
+    return usageData
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10)
+      .map(stat => ({
+        userId: stat.userId,
+        count: stat.count,
+        dailyAverage: stat.count / length,
+        topCommand: topCommands[stat.userId]?.name,
+      }))
   }
 
   private async getMessageByDate() {
@@ -256,7 +276,7 @@ class Analytics extends DataService<Analytics.Payload> {
       guildIncrement,
       commandRate,
       dauHistory,
-      messageByBot,
+      userUsageRank,
       messageByDate,
       messageByHour,
     ] = await Promise.all([
@@ -275,7 +295,7 @@ class Analytics extends DataService<Analytics.Payload> {
       )),
       this.getCommandRate(lengthTask),
       this.getDauHistory(),
-      this.getMessageByBot(lengthTask),
+      this.getUserUsageRank(lengthTask),
       messageByDateTask,
       this.getMessageByHour(lengthTask),
     ])
@@ -286,7 +306,7 @@ class Analytics extends DataService<Analytics.Payload> {
       guildIncrement,
       commandRate,
       dauHistory,
-      messageByBot,
+      userUsageRank,
       messageByDate,
       messageByHour,
     }
@@ -335,9 +355,16 @@ namespace Analytics {
     guildIncrement: number
     dauHistory: number[]
     commandRate: Dict<number>
-    messageByBot: Dict<Dict<MessageStats & Universal.User>>
+    userUsageRank: UserUsage[]
     messageByDate: MessageStats[]
     messageByHour: MessageStats[]
+  }
+
+  export interface UserUsage {
+    userId: number
+    count: number
+    dailyAverage: number
+    topCommand?: string
   }
 
   export interface Config {

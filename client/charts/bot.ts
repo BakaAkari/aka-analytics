@@ -5,49 +5,37 @@ export default (ctx: Context) => {
   ctx.slot({
     type: 'analytic-chart',
     component: createChart({
-      title: '各平台消息占比',
+      title: '用户用量排行',
       fields: ['analytics'],
-      showTab: true,
-      options({ analytics }, tab) {
-        const data = Object
-          .entries(analytics.messageByBot)
-          .map(([key, value]) => ({
-            name: key,
-            children: Object
-              .entries(value)
-              .map(([key, value]) => ({
-                name: value.name || key,
-                value: value[tab],
-              })),
+      options({ analytics }) {
+        const data = analytics.userUsageRank
+          .map(item => ({
+            name: `用户 ${item.userId}`,
+            value: item.dailyAverage,
+            count: item.count,
+            topCommand: item.topCommand,
           }))
-        const total = data.reduce((sum, { children }) => {
-          return sum + children.reduce((sum, { value }) => sum + value, 0)
-        }, 0)
-        if (!total) return
+          .reverse()
+        if (!data.length) return
 
         return {
-          tooltip: Tooltip.item(({ data }) => {
-            return `${data.children ? '平台' : '昵称'}：${data.name}<br>日均消息数量：${+data.value.toFixed(1)}`
+          tooltip: Tooltip.item<typeof data[number]>(({ data }) => {
+            const output = [data.name]
+            output.push(`最近调用：${data.count}`)
+            output.push(`日均调用：${+data.value.toFixed(1)}`)
+            if (data.topCommand) output.push(`常用指令：${data.topCommand}`)
+            return output.join('<br>')
           }),
+          xAxis: {
+            type: 'value',
+          },
+          yAxis: {
+            type: 'category',
+            data: data.map(item => item.name),
+          },
           series: [{
-            type: 'sunburst',
+            type: 'bar',
             data,
-            radius: ['0', '65%'],
-            nodeClick: false,
-            emphasis: {
-              focus: 'ancestor',
-            },
-            levels: [{}, {
-              label: {
-                rotate: 'tangential',
-              },
-            }, {
-              label: {
-                position: 'outside',
-                padding: 3,
-                silent: false,
-              },
-            }],
           }],
         }
       },

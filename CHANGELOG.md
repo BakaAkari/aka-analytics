@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- 将首页“各平台消息占比”卡片替换为“用户用量排行”，基于既有 `analytics.command` 历史数据展示最近统计周期内的 Top 10 用户、调用次数、日均调用和常用指令。
+
 ## 0.1.3
 
 - 将服务端入口改为 CommonJS 输出，避免 Koishi loader 通过 CJS 加载插件时触发 Koishi ESM loader 兼容问题。
