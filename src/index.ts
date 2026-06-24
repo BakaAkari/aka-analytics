@@ -24,7 +24,7 @@ export interface MessageStats {
 }
 
 const logger = new Logger('aka-analytics')
-const periods = [1, 3, 7, 15] as const
+const periods = [7, 30, 90] as const
 
 class Analytics extends DataService<Analytics.Payload> {
   static inject = ['database', 'console']
@@ -368,7 +368,10 @@ class Analytics extends DataService<Analytics.Payload> {
       periodStatsTask,
     ])
     const periodStats = Object.fromEntries(periodEntries) as Record<Analytics.Period, Analytics.PeriodStats>
-    const defaultStats = periodStats[Math.min(this.config.recentDayCount, 15) as Analytics.Period] || periodStats[7]
+    const defaultPeriod = periods.includes(this.config.recentDayCount as Analytics.Period)
+      ? this.config.recentDayCount as Analytics.Period
+      : 90
+    const defaultStats = periodStats[defaultPeriod] || periodStats[90] || periodStats[30] || periodStats[7]
     return {
       userCount,
       userIncrement,
@@ -463,7 +466,7 @@ namespace Analytics {
 
   export const Config: Schema<Config> = Schema.object({
     statsInternal: Schema.natural().role('ms').description('统计数据推送的时间间隔。').default(Time.minute * 10),
-    recentDayCount: Schema.natural().description('统计最近几天的数据。').default(15),
+    recentDayCount: Schema.natural().description('统计最近几天的数据。').default(90),
   })
 }
 

@@ -6,7 +6,7 @@ import './index.scss'
 const VChart = defineAsyncComponent(() => import('./echarts'))
 
 export type MessageTab = 'send' | 'receive'
-export type PeriodTab = 1 | 3 | 7 | 15
+export type PeriodTab = 7 | 30 | 90
 
 export interface ChartOptions {
   title: string
@@ -18,7 +18,7 @@ export interface ChartOptions {
 
 const tabValue = ref<MessageTab>('send')
 const periodValue = ref<PeriodTab>(7)
-const periodOptions: [PeriodTab, string][] = [[1, '一日'], [3, '三日'], [7, '七日'], [15, '十五日']]
+const periodOptions: [PeriodTab, string][] = [[7, '七日'], [30, '三十日'], [90, '九十日']]
 
 export function createChart({ title, fields, showTab, showPeriod, options }: ChartOptions) {
   return defineComponent({
