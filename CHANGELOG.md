@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.1
+
+- 修复 package `exports` 未暴露 `./package.json` 导致 Koishi registry/config 无法解析插件的问题。
+
 ## 0.1.0
 
 - 基于官方 `@koishijs/plugin-analytics` 搭建替代插件 `koishi-plugin-aka-analytics`。
