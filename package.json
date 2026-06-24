@@ -77,7 +77,7 @@
     "yakumo": "^3.2.1"
   },
   "scripts": {
-    "build": "yakumo build",
+    "build": "tsc --project tsconfig.json && koishi-console build .",
     "typecheck": "tsc --project tsconfig.json --noEmit"
   },
   "publishConfig": {

@@ -3,7 +3,9 @@
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib",
-    "types": ["node"]
+    "types": ["node"],
+    "strict": false,
+    "noUncheckedIndexedAccess": false
   },
   "include": [
     "src/**/*.ts"
