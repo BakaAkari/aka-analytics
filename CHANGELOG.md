@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+- 将服务端入口改为 CommonJS 输出，避免 Koishi loader 通过 CJS 加载插件时触发 Koishi ESM loader 兼容问题。
+
 ## 0.1.2
 
 - 修复 package `exports` 主入口未提供默认条件导致 Koishi config 解析插件入口失败的问题。
