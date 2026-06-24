@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+- 修复 package `exports` 主入口未提供默认条件导致 Koishi config 解析插件入口失败的问题。
+
 ## 0.1.1
 
 - 修复 package `exports` 未暴露 `./package.json` 导致 Koishi registry/config 无法解析插件的问题。
