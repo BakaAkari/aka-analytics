@@ -1,0 +1,86 @@
+{
+  "name": "koishi-plugin-aka-analytics",
+  "version": "0.1.0",
+  "description": "Replacement analytics dashboard for Koishi, based on @koishijs/plugin-analytics.",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "main": "lib/index.js",
+  "typings": "lib/index.d.ts",
+  "files": [
+    "lib",
+    "dist",
+    "src"
+  ],
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js"
+    },
+    "./src": "./src/index.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/BakaAkari/aka-analytics.git"
+  },
+  "bugs": {
+    "url": "https://github.com/BakaAkari/aka-analytics/issues"
+  },
+  "homepage": "https://github.com/BakaAkari/aka-analytics#readme",
+  "keywords": [
+    "bot",
+    "chatbot",
+    "koishi",
+    "koishi-plugin",
+    "chart",
+    "console",
+    "statistics",
+    "analytics",
+    "dashboard"
+  ],
+  "yakumo": {
+    "client": "./build/client.ts"
+  },
+  "koishi": {
+    "description": {
+      "en": "Replacement analytics dashboard for Koishi with extended statistics planned.",
+      "zh": "替代官方 analytics 的 Koishi 统计看板，后续扩展细化统计。"
+    },
+    "category": "console",
+    "locales": [
+      "zh",
+      "en"
+    ],
+    "service": {
+      "required": [
+        "console"
+      ],
+      "optional": [
+        "database"
+      ]
+    }
+  },
+  "peerDependencies": {
+    "@koishijs/plugin-console": "^5.30.11",
+    "koishi": "^4.18.11"
+  },
+  "dependencies": {
+    "@koishijs/console": "^5.30.11"
+  },
+  "devDependencies": {
+    "@koishijs/assets": "^1.1.2",
+    "@koishijs/client": "^5.30.11",
+    "@types/node": "^24.5.2",
+    "echarts": "^5.5.0",
+    "koishi": "^4.18.11",
+    "typescript": "^5.9.2",
+    "vue-echarts": "^6.6.9",
+    "yakumo": "^3.2.1"
+  },
+  "scripts": {
+    "build": "yakumo build",
+    "typecheck": "tsc --project tsconfig.json --noEmit"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
