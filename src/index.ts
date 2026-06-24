@@ -24,6 +24,7 @@ export interface MessageStats {
 }
 
 const logger = new Logger('aka-analytics')
+const periods = [1, 3, 7, 15] as const
 
 class Analytics extends DataService<Analytics.Payload> {
   static inject = ['database', 'console']
@@ -195,26 +196,25 @@ class Analytics extends DataService<Analytics.Payload> {
     }
   }
 
-  private queryRecent(): Query.FieldExpr<number> {
+  private queryRecent(days = this.config.recentDayCount): Query.FieldExpr<number> {
     return {
-      $gte: Time.getDateNumber() - this.config.recentDayCount,
+      $gte: Time.getDateNumber() - days,
       $lt: Time.getDateNumber(),
     }
   }
 
-  private async getCommandRate(lengthTask: Promise<number>) {
+  private async getCommandRate(days: number) {
     const data = await this.ctx.database
       .select('analytics.command', {
-        date: this.queryRecent(),
+        date: this.queryRecent(days),
       })
       .groupBy(['name'], {
         count: row => $.sum(row.count),
       })
       .execute()
-    const length = await lengthTask
     const result = {} as Dict<number>
     data.forEach((stat) => {
-      result[stat.name] = stat.count / length
+      result[stat.name] = stat.count / days
     })
     return result
   }
@@ -237,11 +237,11 @@ class Analytics extends DataService<Analytics.Payload> {
     return result
   }
 
-  private async getUserUsageRank(lengthTask: Promise<number>) {
-    const [usageData, commandData, users, koishiUsers, length] = await Promise.all([
+  private async getUserUsageRank(days: number) {
+    const [usageData, commandData, users, koishiUsers] = await Promise.all([
       this.ctx.database
         .select('analytics.command', {
-          date: this.queryRecent(),
+          date: this.queryRecent(days),
           userId: { $gt: 0 },
         })
         .groupBy(['userId'], {
@@ -250,7 +250,7 @@ class Analytics extends DataService<Analytics.Payload> {
         .execute(),
       this.ctx.database
         .select('analytics.command', {
-          date: this.queryRecent(),
+          date: this.queryRecent(days),
           userId: { $gt: 0 },
         })
         .groupBy(['userId', 'name'], {
@@ -259,7 +259,6 @@ class Analytics extends DataService<Analytics.Payload> {
         .execute(),
       this.ctx.database.select('analytics.user').execute(),
       this.ctx.database.select('user').execute(),
-      lengthTask,
     ])
 
     const topCommands = {} as Dict<{ name: string, count: number }>
@@ -285,15 +284,15 @@ class Analytics extends DataService<Analytics.Payload> {
         userId: stat.userId,
         userName: userNames[stat.userId],
         count: stat.count,
-        dailyAverage: stat.count / length,
+        dailyAverage: stat.count / days,
         topCommand: topCommands[stat.userId]?.name,
       }))
   }
 
-  private async getMessageByDate() {
+  private async getMessageByDate(days = Math.max(...periods)) {
     const data = await this.ctx.database
       .select('analytics.message', {
-        date: { $lt: Time.getDateNumber() },
+        date: this.queryRecent(days),
       })
       .groupBy(['type', 'date'], {
         count: row => $.sum(row.count),
@@ -312,38 +311,44 @@ class Analytics extends DataService<Analytics.Payload> {
     return result
   }
 
-  private async getMessageByHour(lengthTask: Promise<number>) {
+  private async getMessageByHour(days: number) {
     const data = await this.ctx.database
       .select('analytics.message', {
-        date: this.queryRecent(),
+        date: this.queryRecent(days),
       })
       .groupBy(['type', 'hour'], {
         count: row => $.sum(row.count),
       })
       .execute()
-    const length = await lengthTask
     const result = new Array(24).fill(null).map(() => ({ send: 0, receive: 0 }))
     data.forEach((stat) => {
-      result[stat.hour][stat.type] = stat.count / length
+      result[stat.hour][stat.type] = stat.count / days
     })
     return result
   }
 
+  private async getPeriodStats(days: Analytics.Period): Promise<Analytics.PeriodStats> {
+    const [commandRate, userUsageRank, messageByHour] = await Promise.all([
+      this.getCommandRate(days),
+      this.getUserUsageRank(days),
+      this.getMessageByHour(days),
+    ])
+    return { commandRate, userUsageRank, messageByHour }
+  }
+
   async download(): Promise<Analytics.Payload> {
     const messageByDateTask = this.getMessageByDate()
-    const lengthTask = messageByDateTask.then((data) => {
-      return Math.min(Math.max(data.length - 1, 1), this.config.recentDayCount)
-    })
+    const periodStatsTask = Promise.all(periods.map(async (days) => {
+      return [days, await this.getPeriodStats(days)] as const
+    }))
     const [
       userCount,
       userIncrement,
       guildCount,
       guildIncrement,
-      commandRate,
       dauHistory,
-      userUsageRank,
       messageByDate,
-      messageByHour,
+      periodEntries,
     ] = await Promise.all([
       this.ctx.database.eval('user', row => $.count(row.id)),
       this.ctx.database.eval('user', row => $.count(row.id), {
@@ -358,22 +363,23 @@ class Analytics extends DataService<Analytics.Payload> {
         $.gte(row.createdAt, Time.fromDateNumber(Time.getDateNumber() - 1)),
         $.lt(row.createdAt, Time.fromDateNumber(Time.getDateNumber())),
       )),
-      this.getCommandRate(lengthTask),
       this.getDauHistory(),
-      this.getUserUsageRank(lengthTask),
       messageByDateTask,
-      this.getMessageByHour(lengthTask),
+      periodStatsTask,
     ])
+    const periodStats = Object.fromEntries(periodEntries) as Record<Analytics.Period, Analytics.PeriodStats>
+    const defaultStats = periodStats[Math.min(this.config.recentDayCount, 15) as Analytics.Period] || periodStats[7]
     return {
       userCount,
       userIncrement,
       guildCount,
       guildIncrement,
-      commandRate,
+      commandRate: defaultStats.commandRate,
       dauHistory,
-      userUsageRank,
+      userUsageRank: defaultStats.userUsageRank,
       messageByDate,
-      messageByHour,
+      messageByHour: defaultStats.messageByHour,
+      periods: periodStats,
     }
   }
 
@@ -421,6 +427,14 @@ namespace Analytics {
     updatedAt: Date
   }
 
+  export type Period = typeof periods[number]
+
+  export interface PeriodStats {
+    commandRate: Dict<number>
+    userUsageRank: UserUsage[]
+    messageByHour: MessageStats[]
+  }
+
   export interface Payload {
     userCount: number
     userIncrement: number
@@ -431,6 +445,7 @@ namespace Analytics {
     userUsageRank: UserUsage[]
     messageByDate: MessageStats[]
     messageByHour: MessageStats[]
+    periods: Record<Period, PeriodStats>
   }
 
   export interface UserUsage {
@@ -448,7 +463,7 @@ namespace Analytics {
 
   export const Config: Schema<Config> = Schema.object({
     statsInternal: Schema.natural().role('ms').description('统计数据推送的时间间隔。').default(Time.minute * 10),
-    recentDayCount: Schema.natural().description('统计最近几天的数据。').default(7),
+    recentDayCount: Schema.natural().description('统计最近几天的数据。').default(15),
   })
 }
 

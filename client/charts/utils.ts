@@ -5,34 +5,47 @@ import './index.scss'
 
 const VChart = defineAsyncComponent(() => import('./echarts'))
 
+export type MessageTab = 'send' | 'receive'
+export type PeriodTab = 1 | 3 | 7 | 15
+
 export interface ChartOptions {
   title: string
   fields?: (keyof Store)[]
   showTab?: boolean
-  options: (store: Store, tab: 'send' | 'receive') => echarts.EChartsOption
+  showPeriod?: boolean
+  options: (store: Store, tab: MessageTab, period: PeriodTab) => echarts.EChartsOption
 }
 
-const tabValue = ref<'send' | 'receive'>('send')
+const tabValue = ref<MessageTab>('send')
+const periodValue = ref<PeriodTab>(7)
+const periodOptions: [PeriodTab, string][] = [[1, '一日'], [3, '三日'], [7, '七日'], [15, '十五日']]
 
-export function createChart({ title, fields, showTab, options }: ChartOptions) {
+export function createChart({ title, fields, showTab, showPeriod, options }: ChartOptions) {
   return defineComponent({
     render: () => {
       if (!fields.every(key => store[key])) return null
-      const option = options(store, tabValue.value)
+      const option = options(store, tabValue.value, periodValue.value)
       if (!option) return
       return h(resolveComponent('k-card'), { class: 'frameless analytic-chart' }, {
         header: () => [
           h('span', { class: 'left' }, [title]),
-          ...showTab ? [h('span', { class: 'right' }, [
-            h('span', {
-              class: 'tab-item' + (tabValue.value === 'send' ? ' active' : ''),
-              onClick: () => tabValue.value = 'send',
-            }, ['发送']),
-            h('span', {
-              class: 'tab-item' + (tabValue.value === 'receive' ? ' active' : ''),
-              onClick: () => tabValue.value = 'receive',
-            }, ['接收']),
-          ])] : [],
+          h('span', { class: 'right' }, [
+            ...showPeriod ? periodOptions.map(([value, label]) => h('span', {
+              class: 'tab-item' + (periodValue.value === value ? ' active' : ''),
+              onClick: () => periodValue.value = value,
+            }, [label])) : [],
+            ...showTab ? [
+              h('span', { class: 'tab-divider' }),
+              h('span', {
+                class: 'tab-item' + (tabValue.value === 'send' ? ' active' : ''),
+                onClick: () => tabValue.value = 'send',
+              }, ['发送']),
+              h('span', {
+                class: 'tab-item' + (tabValue.value === 'receive' ? ' active' : ''),
+                onClick: () => tabValue.value = 'receive',
+              }, ['接收']),
+            ] : [],
+          ]),
         ],
         default: () => {
           return h(VChart, { option, autoresize: true })

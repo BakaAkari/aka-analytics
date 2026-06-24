@@ -10,9 +10,10 @@ export default (ctx: Context) => {
       title: '历史消息数量',
       fields: ['analytics'],
       showTab: true,
-      options({ analytics }, tab) {
+      showPeriod: true,
+      options({ analytics }, tab, period) {
         if (!analytics.messageByDate.length) return
-        const data = analytics.messageByDate.slice(1)
+        const data = analytics.messageByDate.slice(1, period + 1)
 
         return {
           tooltip: Tooltip.axis(([{ name, value }]) => {

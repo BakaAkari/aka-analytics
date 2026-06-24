@@ -7,8 +7,9 @@ export default (ctx: Context) => {
     component: createChart({
       title: '指令调用频率',
       fields: ['analytics'],
-      options({ analytics }) {
-        const data = Object.entries(analytics.commandRate)
+      showPeriod: true,
+      options({ analytics }, _, period) {
+        const data = Object.entries(analytics.periods[period].commandRate)
           .sort((a, b) => b[1] - a[1])
           .map(([name, value]) => ({ name, value }))
         if (!data.length) return

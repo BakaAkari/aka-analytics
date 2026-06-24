@@ -7,8 +7,9 @@ export default (ctx: Context) => {
     component: createChart({
       title: '用户用量排行',
       fields: ['analytics'],
-      options({ analytics }) {
-        const data = analytics.userUsageRank
+      showPeriod: true,
+      options({ analytics }, _, period) {
+        const data = analytics.periods[period].userUsageRank
           .map(item => ({
             name: item.userName || `用户 ${item.userId}`,
             value: item.dailyAverage,
