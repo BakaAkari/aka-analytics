@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- 修复未导出 Config schema 导致插件配置界面不显示配置项的问题。
+
 ## 0.4.0
 
 - 新增 AI 调用统计：从 yesimbot 日志解析模型、token 消耗、请求延迟、失败率。
@@ -9,9 +13,4 @@
 - 新增 4 个数据库表：`analytics.ai_request`、`analytics.ai_model_daily`、`analytics.image_generation`、`analytics.log_offset`。
 
 ## 0.3.1
-
-- 将周期切换从一日、三日、七日、十五日调整为七日、三十日、九十日，移除低价值短周期选项。
-- 将默认统计窗口调整为九十日，确保长周期切换有完整数据来源。
-
-## 0.3.0
 
