@@ -10,7 +10,7 @@ export class LogOffsetService {
     this.logger = logger
   }
 
-  async get(fileName: string, inode: number): Promise<number> {
+  async get(fileName: string, inode: string): Promise<number> {
     try {
       const rows = await this.ctx.database.get('analytics.log_offset' as any, { fileName, inode })
       if (rows?.length) return (rows[0] as any).lastOffset
@@ -20,7 +20,7 @@ export class LogOffsetService {
     return 0
   }
 
-  async update(fileName: string, inode: number, size: number, lastOffset: number) {
+  async update(fileName: string, inode: string, size: number, lastOffset: number) {
     try {
       await this.ctx.database.upsert('analytics.log_offset' as any, [{
         fileName,

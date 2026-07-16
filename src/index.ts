@@ -208,12 +208,10 @@ class Analytics extends DataService<Analytics.Payload> {
 
     ctx.model.extend('analytics.log_offset', {
       fileName: 'string(255)',
-      inode: 'integer',
+      inode: 'string(63)',
       size: 'integer',
       lastOffset: 'integer',
       updatedAt: 'timestamp',
-    }, {
-      primary: ['fileName', 'inode'],
     })
   }
 
@@ -592,7 +590,7 @@ namespace Analytics {
 
   export interface LogOffset {
     fileName: string
-    inode: number
+    inode: string
     size: number
     lastOffset: number
     updatedAt: Date

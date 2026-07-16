@@ -56,7 +56,7 @@ export interface ImageGenerationRecord {
 
 export interface LogOffsetRecord {
   fileName: string
-  inode: number
+  inode: string
   size: number
   lastOffset: number
   updatedAt: Date

@@ -5,7 +5,7 @@ import { Logger } from 'koishi'
 export interface LogFileInfo {
   fileName: string
   fullPath: string
-  inode: number
+  inode: string
   size: number
 }
 
@@ -35,7 +35,7 @@ export class LogReader {
         files.push({
           fileName: entry.name,
           fullPath,
-          inode: info.ino,
+          inode: String(info.ino),
           size: info.size,
         })
       } catch (err) {
