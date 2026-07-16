@@ -632,3 +632,4 @@ namespace Analytics {
 }
 
 export default Analytics
+export { Config } from './config'
