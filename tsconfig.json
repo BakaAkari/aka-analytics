@@ -1,13 +1,20 @@
 {
-  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
     "outDir": "lib",
+    "target": "es2022",
+    "module": "commonjs",
+    "declaration": true,
+    "composite": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@satorijs/element",
     "types": ["node"],
     "strict": false,
     "noUncheckedIndexedAccess": false
   },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src"]
 }
