@@ -38,6 +38,7 @@ const logger = new Logger('aka-analytics')
 const periods = [7, 30, 90] as const
 
 class Analytics extends DataService<Analytics.Payload> {
+  static Config = Config
   static inject = ['database', 'console']
 
   lastUpdate = new Date()
