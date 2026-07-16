@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.4.0
+
+- 新增 AI 调用统计：从 yesimbot 日志解析模型、token 消耗、请求延迟、失败率。
+- 新增图像生成统计：从 aka-ai-image-generator 日志解析风格、次数、张数、积分消耗。
+- 支持首次安装时全量导入历史日志，之后自动切换为增量监听。
+- 新增独立 `/analytics` 页面，带滚动、分区块布局和多周期切换。
+- 新增 4 个数据库表：`analytics.ai_request`、`analytics.ai_model_daily`、`analytics.image_generation`、`analytics.log_offset`。
+
 ## 0.3.1
 
 - 将周期切换从一日、三日、七日、十五日调整为七日、三十日、九十日，移除低价值短周期选项。
@@ -7,31 +15,3 @@
 
 ## 0.3.0
 
-- 四个首页统计面板新增一日、三日、七日、十五日周期切换；后端同时聚合多周期数据，前端复用统一周期切换控件。
-- 将默认统计窗口调整为十五日，确保周期切换有完整数据来源。
-
-## 0.2.1
-
-- 用户用量排行优先显示已采集到的 Lark 用户名；新增 `analytics.user` 用户资料映射表，并在无新映射时回退读取 Koishi `user.name`。
-
-## 0.2.0
-
-- 将首页“各平台消息占比”卡片替换为“用户用量排行”，基于既有 `analytics.command` 历史数据展示最近统计周期内的 Top 10 用户、调用次数、日均调用和常用指令。
-
-## 0.1.3
-
-- 将服务端入口改为 CommonJS 输出，避免 Koishi loader 通过 CJS 加载插件时触发 Koishi ESM loader 兼容问题。
-
-## 0.1.2
-
-- 修复 package `exports` 主入口未提供默认条件导致 Koishi config 解析插件入口失败的问题。
-
-## 0.1.1
-
-- 修复 package `exports` 未暴露 `./package.json` 导致 Koishi registry/config 无法解析插件的问题。
-
-## 0.1.0
-
-- 基于官方 `@koishijs/plugin-analytics` 搭建替代插件 `koishi-plugin-aka-analytics`。
-- 保留 `analytics.message`、`analytics.command`、Console service `analytics` 与首页统计卡片。
-- 增加 README 与 ROADMAP，明确必须关闭官方 analytics 后使用本插件。

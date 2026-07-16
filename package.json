@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-aka-analytics",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Replacement analytics dashboard for Koishi, based on @koishijs/plugin-analytics.",
   "license": "AGPL-3.0",
   "type": "commonjs",
