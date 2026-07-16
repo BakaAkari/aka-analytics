@@ -105,7 +105,7 @@ export class HistoricalLogImporter {
       }
 
       // Mark entire file as consumed
-      await this.offset.update(file.fileName, file.inode, file.size, newOffset)
+      await this.offset.update(file.fileName, file.size, newOffset)
     }
 
     if (aiBuffer.length) await this.aiService.record(aiBuffer)

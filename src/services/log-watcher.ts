@@ -56,7 +56,7 @@ export class LogWatcher {
       const imageGenerations: any[] = []
 
       for (const file of files) {
-        const lastOffset = await this.offset.get(file.fileName, file.inode)
+        const lastOffset = await this.offset.get(file.fileName)
         const { offset: newOffset, lines } = await this.reader.readNewLines(file.fullPath, lastOffset)
 
         for (const line of lines) {
@@ -67,7 +67,7 @@ export class LogWatcher {
         }
 
         if (newOffset !== lastOffset) {
-          await this.offset.update(file.fileName, file.inode, file.size, newOffset)
+          await this.offset.update(file.fileName, file.size, newOffset)
         }
       }
 

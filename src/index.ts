@@ -37,6 +37,133 @@ export interface MessageStats {
 const logger = new Logger('aka-analytics')
 const periods = [7, 30, 90] as const
 
+namespace Analytics {
+  export interface Index {
+    id?: number
+    date: number
+    hour: number
+    selfId: string
+    platform: string
+  }
+
+  export interface Audit extends Index {
+    count: number
+  }
+
+  export interface Message extends Index {
+    type: string
+    count: number
+  }
+
+  export interface Command extends Index {
+    name: string
+    userId: number
+    channelId: string
+    count: number
+  }
+
+  export interface User {
+    userId: number
+    platform: string
+    platformUserId: string
+    userName: string
+    updatedAt: Date
+  }
+
+  export interface AiRequest {
+    id: string
+    timestamp: Date
+    date: number
+    hour: number
+    source: string
+    provider: string
+    modelId: string
+    userId: string
+    platform: string
+    channelId: string
+    guildId: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    latencyMs: number
+    firstTokenLatencyMs: number
+    success: boolean
+    errorCode: string
+    fallbackFrom: string
+  }
+
+  export interface AiModelDaily {
+    date: number
+    source: string
+    provider: string
+    modelId: string
+    requestCount: number
+    successCount: number
+    failCount: number
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    totalLatencyMs: number
+  }
+
+  export interface ImageGeneration {
+    id: string
+    timestamp: Date
+    date: number
+    hour: number
+    userId: string
+    platform: string
+    commandName: string
+    styleName: string
+    modelId: string
+    provider: string
+    numImages: number
+    success: boolean
+    freeUsed: number
+    purchasedUsed: number
+    consumptionType: string
+  }
+
+  export interface LogOffset {
+    fileName: string
+    size: number
+    lastOffset: number
+    updatedAt: Date
+  }
+
+  export type Period = typeof periods[number]
+
+  export interface PeriodStats {
+    commandRate: Dict<number>
+    userUsageRank: UserUsage[]
+    messageByHour: MessageStats[]
+    aiStats: AiStats
+    imageStats: ImageStats
+  }
+
+  export interface Payload {
+    userCount: number
+    userIncrement: number
+    guildCount: number
+    guildIncrement: number
+    dauHistory: number[]
+    commandRate: Dict<number>
+    userUsageRank: UserUsage[]
+    messageByDate: MessageStats[]
+    messageByHour: MessageStats[]
+    periods: Record<Period, PeriodStats>
+    aiStats: AiStats
+    imageStats: ImageStats
+  }
+
+  export interface UserUsage {
+    userId: number
+    userName?: string
+    count: number
+    dailyAverage: number
+    topCommand?: string
+  }
+}
 class Analytics extends DataService<Analytics.Payload> {
   static Config = Config
   static inject = ['database', 'console']
@@ -208,7 +335,6 @@ class Analytics extends DataService<Analytics.Payload> {
 
     ctx.model.extend('analytics.log_offset', {
       fileName: 'string(255)',
-      inode: 'string(63)',
       size: 'integer',
       lastOffset: 'integer',
       updatedAt: 'timestamp',
@@ -501,134 +627,6 @@ class Analytics extends DataService<Analytics.Payload> {
   }
 }
 
-namespace Analytics {
-  export interface Index {
-    id?: number
-    date: number
-    hour: number
-    selfId: string
-    platform: string
-  }
-
-  export interface Audit extends Index {
-    count: number
-  }
-
-  export interface Message extends Index {
-    type: string
-    count: number
-  }
-
-  export interface Command extends Index {
-    name: string
-    userId: number
-    channelId: string
-    count: number
-  }
-
-  export interface User {
-    userId: number
-    platform: string
-    platformUserId: string
-    userName: string
-    updatedAt: Date
-  }
-
-  export interface AiRequest {
-    id: string
-    timestamp: Date
-    date: number
-    hour: number
-    source: string
-    provider: string
-    modelId: string
-    userId: string
-    platform: string
-    channelId: string
-    guildId: string
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-    latencyMs: number
-    firstTokenLatencyMs: number
-    success: boolean
-    errorCode: string
-    fallbackFrom: string
-  }
-
-  export interface AiModelDaily {
-    date: number
-    source: string
-    provider: string
-    modelId: string
-    requestCount: number
-    successCount: number
-    failCount: number
-    promptTokens: number
-    completionTokens: number
-    totalTokens: number
-    totalLatencyMs: number
-  }
-
-  export interface ImageGeneration {
-    id: string
-    timestamp: Date
-    date: number
-    hour: number
-    userId: string
-    platform: string
-    commandName: string
-    styleName: string
-    modelId: string
-    provider: string
-    numImages: number
-    success: boolean
-    freeUsed: number
-    purchasedUsed: number
-    consumptionType: string
-  }
-
-  export interface LogOffset {
-    fileName: string
-    inode: string
-    size: number
-    lastOffset: number
-    updatedAt: Date
-  }
-
-  export type Period = typeof periods[number]
-
-  export interface PeriodStats {
-    commandRate: Dict<number>
-    userUsageRank: UserUsage[]
-    messageByHour: MessageStats[]
-    aiStats: AiStats
-    imageStats: ImageStats
-  }
-
-  export interface Payload {
-    userCount: number
-    userIncrement: number
-    guildCount: number
-    guildIncrement: number
-    dauHistory: number[]
-    commandRate: Dict<number>
-    userUsageRank: UserUsage[]
-    messageByDate: MessageStats[]
-    messageByHour: MessageStats[]
-    periods: Record<Period, PeriodStats>
-    aiStats: AiStats
-    imageStats: ImageStats
-  }
-
-  export interface UserUsage {
-    userId: number
-    userName?: string
-    count: number
-    dailyAverage: number
-    topCommand?: string
-  }
-}
 
 export default Analytics
 export { Config } from './config'
