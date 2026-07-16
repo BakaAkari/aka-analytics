@@ -1,12 +1,23 @@
 import { $, Context, deepEqual, Dict, Logger, pick, Query, Row, Schema, Session, Time } from 'koishi'
 import { DataService } from '@koishijs/console'
 import { resolve } from 'path'
+import { Config } from './config'
+import { LogWatcher } from './services/log-watcher'
+import { AiRequestService } from './services/ai-request-service'
+import { ImageGenerationService } from './services/image-generation-service'
+import { AggregationService } from './services/aggregation-service'
+import { HistoricalLogImporter } from './services/historical-log-importer'
+import type { AiStats, ImageStats } from './services/aggregation-service'
 
 declare module 'koishi' {
   interface Tables {
     'analytics.message': Analytics.Message
     'analytics.command': Analytics.Command
     'analytics.user': Analytics.User
+    'analytics.ai_request': Analytics.AiRequest
+    'analytics.ai_model_daily': Analytics.AiModelDaily
+    'analytics.image_generation': Analytics.ImageGeneration
+    'analytics.log_offset': Analytics.LogOffset
   }
 }
 
@@ -38,42 +49,16 @@ class Analytics extends DataService<Analytics.Payload> {
   private commands: Analytics.Command[] = []
   private users: Analytics.User[] = []
 
-  constructor(ctx: Context, public config: Analytics.Config = {}) {
+  private aiRequestService: AiRequestService
+  private imageGenerationService: ImageGenerationService
+  private aggregationService: AggregationService
+  private logWatcher: LogWatcher
+  private historicalImporter: HistoricalLogImporter
+
+  constructor(ctx: Context, public config: Config) {
     super(ctx, 'analytics')
 
-    ctx.model.extend('analytics.message', {
-      date: 'integer',
-      hour: 'integer',
-      type: 'string(63)',
-      selfId: 'string(63)',
-      platform: 'string(63)',
-      count: 'integer',
-    }, {
-      primary: ['date', 'hour', 'type', 'selfId', 'platform'],
-    })
-
-    ctx.model.extend('analytics.command', {
-      date: 'integer',
-      hour: 'integer',
-      name: 'string(63)',
-      selfId: 'string(63)',
-      userId: 'integer',
-      channelId: 'string(63)',
-      platform: 'string(63)',
-      count: 'integer',
-    }, {
-      primary: ['date', 'hour', 'name', 'selfId', 'userId', 'channelId', 'platform'],
-    })
-
-    ctx.model.extend('analytics.user', {
-      userId: 'integer',
-      platform: 'string(63)',
-      platformUserId: 'string(255)',
-      userName: 'string(255)',
-      updatedAt: 'timestamp',
-    }, {
-      primary: ['userId'],
-    })
+    this.extendModels(ctx)
 
     ctx.on('exit', () => this.upload(true))
 
@@ -109,9 +94,125 @@ class Analytics extends DataService<Analytics.Payload> {
       this.upload()
     })
 
+    this.aiRequestService = new AiRequestService(ctx, logger)
+    this.imageGenerationService = new ImageGenerationService(ctx, logger)
+    this.aggregationService = new AggregationService(ctx, config, logger)
+    this.logWatcher = new LogWatcher(ctx, config, logger, this.aiRequestService, this.imageGenerationService)
+    this.historicalImporter = new HistoricalLogImporter(ctx, config, logger, this.aiRequestService, this.imageGenerationService)
+
+    ctx.on('ready', async () => {
+      await this.historicalImporter.runIfNeeded()
+    })
+
     ctx.console.addEntry({
       dev: resolve(__dirname, '../client/index.ts'),
       prod: resolve(__dirname, '../dist'),
+    })
+  }
+
+  private extendModels(ctx: Context) {
+    ctx.model.extend('analytics.message', {
+      date: 'integer',
+      hour: 'integer',
+      type: 'string(63)',
+      selfId: 'string(63)',
+      platform: 'string(63)',
+      count: 'integer',
+    }, {
+      primary: ['date', 'hour', 'type', 'selfId', 'platform'],
+    })
+
+    ctx.model.extend('analytics.command', {
+      date: 'integer',
+      hour: 'integer',
+      name: 'string(63)',
+      selfId: 'string(63)',
+      userId: 'integer',
+      channelId: 'string(63)',
+      platform: 'string(63)',
+      count: 'integer',
+    }, {
+      primary: ['date', 'hour', 'name', 'selfId', 'userId', 'channelId', 'platform'],
+    })
+
+    ctx.model.extend('analytics.user', {
+      userId: 'integer',
+      platform: 'string(63)',
+      platformUserId: 'string(255)',
+      userName: 'string(255)',
+      updatedAt: 'timestamp',
+    }, {
+      primary: ['userId'],
+    })
+
+    ctx.model.extend('analytics.ai_request', {
+      id: 'string(255)',
+      timestamp: 'timestamp',
+      date: 'integer',
+      hour: 'integer',
+      source: 'string(63)',
+      provider: 'string(63)',
+      modelId: 'string(127)',
+      userId: 'string(127)',
+      platform: 'string(63)',
+      channelId: 'string(127)',
+      guildId: 'string(127)',
+      promptTokens: 'integer',
+      completionTokens: 'integer',
+      totalTokens: 'integer',
+      latencyMs: 'integer',
+      firstTokenLatencyMs: 'integer',
+      success: 'boolean',
+      errorCode: 'string(255)',
+      fallbackFrom: 'string(127)',
+    }, {
+      primary: 'id',
+    })
+
+    ctx.model.extend('analytics.ai_model_daily', {
+      date: 'integer',
+      source: 'string(63)',
+      provider: 'string(63)',
+      modelId: 'string(127)',
+      requestCount: 'integer',
+      successCount: 'integer',
+      failCount: 'integer',
+      promptTokens: 'integer',
+      completionTokens: 'integer',
+      totalTokens: 'integer',
+      totalLatencyMs: 'integer',
+    }, {
+      primary: ['date', 'source', 'provider', 'modelId'],
+    })
+
+    ctx.model.extend('analytics.image_generation', {
+      id: 'string(255)',
+      timestamp: 'timestamp',
+      date: 'integer',
+      hour: 'integer',
+      userId: 'string(127)',
+      platform: 'string(63)',
+      commandName: 'string(127)',
+      styleName: 'string(127)',
+      modelId: 'string(127)',
+      provider: 'string(63)',
+      numImages: 'integer',
+      success: 'boolean',
+      freeUsed: 'integer',
+      purchasedUsed: 'integer',
+      consumptionType: 'string(63)',
+    }, {
+      primary: 'id',
+    })
+
+    ctx.model.extend('analytics.log_offset', {
+      fileName: 'string(255)',
+      inode: 'integer',
+      size: 'integer',
+      lastOffset: 'integer',
+      updatedAt: 'timestamp',
+    }, {
+      primary: ['fileName', 'inode'],
     })
   }
 
@@ -184,7 +285,7 @@ class Analytics extends DataService<Analytics.Payload> {
   async upload(forced = false) {
     const date = new Date()
     const dateHour = date.getHours()
-    if (forced || +date - +this.lastUpdate > this.config.statsInternal || dateHour !== this.updateHour) {
+    if (forced || +date - +this.lastUpdate > this.config.statsInterval || dateHour !== this.updateHour) {
       this.lastUpdate = date
       this.updateHour = dateHour
       await Promise.all([
@@ -328,12 +429,14 @@ class Analytics extends DataService<Analytics.Payload> {
   }
 
   private async getPeriodStats(days: Analytics.Period): Promise<Analytics.PeriodStats> {
-    const [commandRate, userUsageRank, messageByHour] = await Promise.all([
+    const [commandRate, userUsageRank, messageByHour, aiStats, imageStats] = await Promise.all([
       this.getCommandRate(days),
       this.getUserUsageRank(days),
       this.getMessageByHour(days),
+      this.aggregationService.getAiStats(days),
+      this.aggregationService.getImageStats(days),
     ])
-    return { commandRate, userUsageRank, messageByHour }
+    return { commandRate, userUsageRank, messageByHour, aiStats, imageStats }
   }
 
   async download(): Promise<Analytics.Payload> {
@@ -368,21 +471,23 @@ class Analytics extends DataService<Analytics.Payload> {
       periodStatsTask,
     ])
     const periodStats = Object.fromEntries(periodEntries) as Record<Analytics.Period, Analytics.PeriodStats>
-    const defaultPeriod = periods.includes(this.config.recentDayCount as Analytics.Period)
+    const defaultPeriod = periods.includes(this.config.recentDayCount as any)
       ? this.config.recentDayCount as Analytics.Period
       : 90
-    const defaultStats = periodStats[defaultPeriod] || periodStats[90] || periodStats[30] || periodStats[7]
+    const defaultStats = periodStats[defaultPeriod] || periodStats[90]
     return {
       userCount,
       userIncrement,
       guildCount,
       guildIncrement,
-      commandRate: defaultStats.commandRate,
       dauHistory,
+      commandRate: defaultStats.commandRate,
       userUsageRank: defaultStats.userUsageRank,
       messageByDate,
       messageByHour: defaultStats.messageByHour,
       periods: periodStats,
+      aiStats: defaultStats.aiStats,
+      imageStats: defaultStats.imageStats,
     }
   }
 
@@ -430,12 +535,76 @@ namespace Analytics {
     updatedAt: Date
   }
 
+  export interface AiRequest {
+    id: string
+    timestamp: Date
+    date: number
+    hour: number
+    source: string
+    provider: string
+    modelId: string
+    userId: string
+    platform: string
+    channelId: string
+    guildId: string
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    latencyMs: number
+    firstTokenLatencyMs: number
+    success: boolean
+    errorCode: string
+    fallbackFrom: string
+  }
+
+  export interface AiModelDaily {
+    date: number
+    source: string
+    provider: string
+    modelId: string
+    requestCount: number
+    successCount: number
+    failCount: number
+    promptTokens: number
+    completionTokens: number
+    totalTokens: number
+    totalLatencyMs: number
+  }
+
+  export interface ImageGeneration {
+    id: string
+    timestamp: Date
+    date: number
+    hour: number
+    userId: string
+    platform: string
+    commandName: string
+    styleName: string
+    modelId: string
+    provider: string
+    numImages: number
+    success: boolean
+    freeUsed: number
+    purchasedUsed: number
+    consumptionType: string
+  }
+
+  export interface LogOffset {
+    fileName: string
+    inode: number
+    size: number
+    lastOffset: number
+    updatedAt: Date
+  }
+
   export type Period = typeof periods[number]
 
   export interface PeriodStats {
     commandRate: Dict<number>
     userUsageRank: UserUsage[]
     messageByHour: MessageStats[]
+    aiStats: AiStats
+    imageStats: ImageStats
   }
 
   export interface Payload {
@@ -449,6 +618,8 @@ namespace Analytics {
     messageByDate: MessageStats[]
     messageByHour: MessageStats[]
     periods: Record<Period, PeriodStats>
+    aiStats: AiStats
+    imageStats: ImageStats
   }
 
   export interface UserUsage {
@@ -458,16 +629,6 @@ namespace Analytics {
     dailyAverage: number
     topCommand?: string
   }
-
-  export interface Config {
-    statsInternal?: number
-    recentDayCount?: number
-  }
-
-  export const Config: Schema<Config> = Schema.object({
-    statsInternal: Schema.natural().role('ms').description('统计数据推送的时间间隔。').default(Time.minute * 10),
-    recentDayCount: Schema.natural().description('统计最近几天的数据。').default(90),
-  })
 }
 
 export default Analytics
