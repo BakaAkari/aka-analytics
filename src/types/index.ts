@@ -86,7 +86,17 @@ export interface YesimbotRequestFinish {
 
 /** Well-known log source names used in Koishi log lines */
 export const KNOWN_SOURCES: Record<string, string[]> = {
-  'yesimbot': ['yesimbot'],
+  'yesimbot': [
+    'yesimbot',
+    '[聊天模型]',
+    '[心跳处理器]',
+    '[请求执行器]',
+    '[智能体核心]',
+    '[世界状态]',
+    '[L1 记忆]',
+    '[L2-语义记忆]',
+    '[刺激调度器]',
+  ],
   'chat-luna': ['chatluna', 'chat-luna'],
   'image-generator': ['UsageReporter', 'ImageGeneration'],
 }
