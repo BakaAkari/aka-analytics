@@ -83,3 +83,21 @@ export interface YesimbotRequestFinish {
   success: boolean
   errorCode?: string
 }
+
+/** Well-known log source names used in Koishi log lines */
+export const KNOWN_SOURCES: Record<string, string[]> = {
+  'yesimbot': ['yesimbot'],
+  'chat-luna': ['chatluna', 'chat-luna'],
+  'image-generator': ['UsageReporter', 'ImageGeneration'],
+}
+
+/** Infer which tracked source a log line belongs to, or null if unknown/unmatched. */
+export function inferSource(name: string): string | null {
+  if (!name || typeof name !== 'string') return null
+  for (const [source, patterns] of Object.entries(KNOWN_SOURCES)) {
+    if (patterns.some(p => name === p || name.startsWith(p + ':') || name.includes(p))) {
+      return source
+    }
+  }
+  return null
+}

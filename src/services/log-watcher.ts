@@ -8,6 +8,7 @@ import { ChatlunaParser } from '../parsers/chatluna'
 import { ImageGeneratorParser } from '../parsers/image-generator'
 import type { Config } from '../config'
 import type { ParsedLogLine } from '../types'
+import { inferSource } from '../types'
 
 export class LogWatcher {
   private ctx: Context
@@ -52,12 +53,13 @@ export class LogWatcher {
 
     try {
       const files = await this.reader.listLogFiles(logDirectory)
-      const aiRequests: any[] = []
-      const imageGenerations: any[] = []
 
       for (const file of files) {
         const lastOffset = await this.offset.get(file.fileName)
         const { offset: newOffset, lines } = await this.reader.readNewLines(file.fullPath, lastOffset)
+
+        const aiRequests: any[] = []
+        const imageGenerations: any[] = []
 
         for (const line of lines) {
           const parsed = this.parseLine(line, file.fileName)
@@ -66,16 +68,12 @@ export class LogWatcher {
           else imageGenerations.push(parsed.record)
         }
 
+        if (aiRequests.length) await this.aiService.record(aiRequests)
+        if (imageGenerations.length) await this.imageService.record(imageGenerations)
+
         if (newOffset !== lastOffset) {
           await this.offset.update(file.fileName, file.size, newOffset)
         }
-      }
-
-      if (aiRequests.length) await this.aiService.record(aiRequests)
-      if (imageGenerations.length) await this.imageService.record(imageGenerations)
-
-      if (aiRequests.length || imageGenerations.length) {
-        this.logger.debug('parsed %d ai requests, %d image generations from logs', aiRequests.length, imageGenerations.length)
       }
     } catch (err) {
       this.logger.warn('log scan failed', err)
@@ -89,20 +87,20 @@ export class LogWatcher {
     } catch {
       return null
     }
-
     if (!log || typeof log !== 'object') return null
 
-    if (this.config.enableAiStats) {
-      const yesimbot = this.yesimbotParser.parse(log)
-      if (yesimbot) return yesimbot
+    const source = inferSource(log.name)
+    if (!source) return null
+    if (!this.config.trackedSources?.[source]) return null
 
-      const chatluna = this.chatlunaParser.parse(log)
-      if (chatluna) return chatluna
+    if (source === 'yesimbot' && this.config.enableAiStats) {
+      return this.yesimbotParser.parse(log)
     }
-
-    if (this.config.enableImageStats) {
-      const image = this.imageGeneratorParser.parse(log)
-      if (image) return image
+    if (source === 'chat-luna' && this.config.enableAiStats) {
+      return this.chatlunaParser.parse(log)
+    }
+    if (source === 'image-generator' && this.config.enableImageStats) {
+      return this.imageGeneratorParser.parse(log)
     }
 
     return null

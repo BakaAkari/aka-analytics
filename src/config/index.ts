@@ -9,6 +9,8 @@ export interface Config {
   enableImageStats?: boolean
   chatlunaDefaultModel?: string
   chatlunaTokenPerChar?: number
+  /** Per-source toggle: plugin name -> enabled/disabled. Only enabled sources are parsed. */
+  trackedSources: Record<string, boolean>
 }
 
 export const Config = Schema.object({
@@ -20,4 +22,11 @@ export const Config = Schema.object({
   enableImageStats: Schema.boolean().description('是否启用图像生成统计。').default(true),
   chatlunaDefaultModel: Schema.string().description('ChatLuna 默认模型，用于日志中未给出模型时的回退。').default('deepseek/deepseek-v4-flash-high-thinking'),
   chatlunaTokenPerChar: Schema.number().description('ChatLuna 字符到 token 的估算系数。').default(0.25),
+  trackedSources: Schema.dict(Boolean)
+    .description('统计来源（插件名 -> 启用/禁用）。只有启用的来源才会被解析。')
+    .default({
+      yesimbot: true,
+      'image-generator': true,
+      'chat-luna': true,
+    }),
 })
