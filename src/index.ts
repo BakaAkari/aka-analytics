@@ -338,6 +338,8 @@ class Analytics extends DataService<Analytics.Payload> {
       size: 'integer',
       lastOffset: 'integer',
       updatedAt: 'timestamp',
+    }, {
+      primary: 'fileName',
     })
   }
 
