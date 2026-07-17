@@ -17,7 +17,7 @@ declare module 'koishi' {
     'analytics.ai_request': Analytics.AiRequest
     'analytics.ai_model_daily': Analytics.AiModelDaily
     'analytics.image_generation': Analytics.ImageGeneration
-    'analytics.log_offset': Analytics.LogOffset
+    'analytics.log_offset_v2': Analytics.LogOffset
   }
 }
 
@@ -333,7 +333,7 @@ class Analytics extends DataService<Analytics.Payload> {
       primary: 'id',
     })
 
-    ctx.model.extend('analytics.log_offset', {
+    ctx.model.extend('analytics.log_offset_v2', {
       fileName: 'string(255)',
       size: 'integer',
       lastOffset: 'integer',

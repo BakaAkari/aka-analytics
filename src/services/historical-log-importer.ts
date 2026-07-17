@@ -44,7 +44,7 @@ export class HistoricalLogImporter {
 
   async runIfNeeded(): Promise<boolean> {
     try {
-      const rows = await this.ctx.database.select('analytics.log_offset' as any).limit(1).execute() as any[]
+      const rows = await this.ctx.database.select('analytics.log_offset_v2' as any).limit(1).execute() as any[]
       if (rows?.length > 0) {
         this.logger.debug('historical log import already done, skip')
         return false

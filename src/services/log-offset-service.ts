@@ -12,7 +12,7 @@ export class LogOffsetService {
 
   async get(fileName: string): Promise<number> {
     try {
-      const rows = await this.ctx.database.get('analytics.log_offset' as any, { fileName })
+      const rows = await this.ctx.database.get('analytics.log_offset_v2' as any, { fileName })
       if (rows?.length) return (rows[0] as any).lastOffset
     } catch (err) {
       this.logger.warn('failed to read log offset for %s', fileName, err)
@@ -22,7 +22,7 @@ export class LogOffsetService {
 
   async update(fileName: string, size: number, lastOffset: number) {
     try {
-      await this.ctx.database.upsert('analytics.log_offset' as any, [{
+      await this.ctx.database.upsert('analytics.log_offset_v2' as any, [{
         fileName,
         size,
         lastOffset,
