@@ -53,6 +53,7 @@ export class LogWatcher {
 
     try {
       const files = await this.reader.listLogFiles(logDirectory)
+      files.sort((a, b) => a.fileName < b.fileName ? -1 : a.fileName > b.fileName ? 1 : 0)
 
       for (const file of files) {
         const lastOffset = await this.offset.get(file.fileName)
@@ -75,8 +76,10 @@ export class LogWatcher {
           await this.offset.update(file.fileName, file.size, newOffset)
         }
       }
+      await this.aiService.flush()
     } catch (err) {
       this.logger.warn('log scan failed', err)
+      try { await this.aiService.flush() } catch {}
     }
   }
 

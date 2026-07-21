@@ -10,6 +10,8 @@ export class AiRequestService {
     this.logger = logger
   }
 
+  private scanState: { date: number; buffer: AiRequestRecord[] } | null = null
+
   async record(requests: AiRequestRecord[]) {
     if (!requests.length) return
 
@@ -19,7 +21,38 @@ export class AiRequestService {
     }))
 
     await this.ctx.database.upsert('analytics.ai_request' as any, normalized as any)
-    await this.aggregateDaily(normalized)
+    await this.bufferDaily(normalized)
+  }
+
+  /**
+   * Buffer records per date. Aggregation only happens when the scan moves
+   * to a newer date or when the watcher's scan cycle ends (flush()).
+   * This guarantees each historical date is aggregated exactly once with
+   * the full day's records, eliminating read-modify-write races against
+   * partially-written days.
+   */
+  private async bufferDaily(requests: AiRequestRecord[]) {
+    for (const req of requests) {
+      if (!this.scanState || this.scanState.date !== req.date) {
+        await this.flush()
+        this.scanState = { date: req.date, buffer: [] }
+      }
+      this.scanState.buffer.push(req)
+    }
+  }
+
+  async flush() {
+    if (!this.scanState || !this.scanState.buffer.length) {
+      this.scanState = null
+      return
+    }
+    const buffer = this.scanState.buffer
+    this.scanState = null
+    try {
+      await this.aggregateDaily(buffer)
+    } catch (err) {
+      this.logger.warn('aggregateDaily failed', err)
+    }
   }
 
   private async aggregateDaily(requests: AiRequestRecord[]) {

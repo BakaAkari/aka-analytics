@@ -31,7 +31,46 @@ export class YesimbotParser {
       return this.parseExecutor(executorMatch.groups.model, content, timestamp)
     }
 
+    // [\u5fc3\u8df3\u5904\u7406\u5668] 💰 Token \u6d88\u8017 lines duplicate the
+    // per-model "传输完成" finish lines (same invocation logged twice).
+    // Skip them to avoid double counting.
+    if (name.startsWith('[\u5fc3\u8df3\u5904\u7406\u5668]')) {
+      return null
+    }
+
     return null
+  }
+
+  /**
+   * Newer yesimbot versions log token usage from the heartbeat processor
+   * instead of the per-model finish line. These lines carry no model name,
+   * so attribute them to the most recently started pending chat request.
+   */
+  private lastModelId: string | null = null
+  private parseHeartbeatToken(content: string, timestamp: number): ParsedLogLine | null {
+    const m = /Token \u6d88\u8017 \| \u8f93\u5165: (?<prompt>\d+) \| \u8f93\u51fa: (?<completion>\d+)/.exec(content)
+    if (!m) return null
+    const modelId = this.lastModelId || 'unknown'
+    const prompt = Number(m.groups.prompt)
+    const completion = Number(m.groups.completion)
+    const req = this.pendingRequests.get(modelId)
+    const record: AiRequestRecord = {
+      ...(req || {
+        id: this.buildId(timestamp, modelId, content),
+        timestamp: new Date(timestamp),
+        date: Time.getDateNumber(new Date(timestamp)),
+        hour: new Date(timestamp).getHours(),
+        source: 'yesimbot',
+      } as AiRequestRecord),
+      modelId,
+      provider: this.inferProvider(modelId),
+      promptTokens: prompt,
+      completionTokens: completion,
+      totalTokens: prompt + completion,
+      success: true,
+    } as AiRequestRecord
+    this.pendingRequests.delete(modelId)
+    return { type: 'ai-request', record }
   }
 
   private parseChatModel(modelId: string, content: string, timestamp: number, log: any): ParsedLogLine | null {
@@ -42,6 +81,7 @@ export class YesimbotParser {
 
     // \uD83D\uDE80 [\u8bf7\u6c42\u5f00\u59cb] [\u6d41\u5f0f] \u6a21\u578b: modelId
     if (content.includes('\u8bf7\u6c42\u5f00\u59cb')) {
+      this.lastModelId = modelId
       this.pendingRequests.set(pendingKey, {
         id: this.buildId(timestamp, modelId, content),
         timestamp: new Date(timestamp),
