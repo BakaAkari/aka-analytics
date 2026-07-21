@@ -51,7 +51,8 @@ export interface ImageGenerationRecord {
   success: boolean
   freeUsed?: number
   purchasedUsed?: number
-  consumptionType?: 'free' | 'purchased' | 'mixed'
+  consumptionType?: 'free' | 'purchased' | 'mixed' | 'unknown'
+  errorCode?: string
 }
 
 export interface LogOffsetRecord {
@@ -97,8 +98,8 @@ export const KNOWN_SOURCES: Record<string, string[]> = {
     '[L2-语义记忆]',
     '[刺激调度器]',
   ],
+  'image-generator': ['aka-ai-image-generator', 'UsageReporter', 'ImageGeneration'],
   'chat-luna': ['chatluna', 'chat-luna'],
-  'image-generator': ['UsageReporter', 'ImageGeneration'],
 }
 
 /** Infer which tracked source a log line belongs to, or null if unknown/unmatched. */

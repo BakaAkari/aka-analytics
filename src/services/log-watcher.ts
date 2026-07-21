@@ -97,6 +97,11 @@ export class LogWatcher {
     if (!this.config.trackedSources?.[source]) return null
 
     if (source === 'yesimbot' && this.config.enableAiStats) {
+      // [世界状态] command-invocation lines also feed the image parser's
+      // command-context tracking (user/style attribution).
+      if ((log.name as string)?.startsWith('[\u4e16\u754c\u72b6\u6001]')) {
+        this.imageGeneratorParser.parse(log)
+      }
       return this.yesimbotParser.parse(log)
     }
     if (source === 'chat-luna' && this.config.enableAiStats) {
