@@ -62,12 +62,12 @@ export class LogReader {
 
       const text = buffer.toString('utf-8')
       // Some lines may be split across reads, keep last incomplete line for next read
-      const lastNewline = text.lastIndexOf('\\n')
+      const lastNewline = text.lastIndexOf('\n')
       const validText = lastNewline >= 0 ? text.slice(0, lastNewline) : ''
       const pendingOffset = lastNewline >= 0 ? lastOffset + Buffer.byteLength(text.slice(0, lastNewline + 1)) : lastOffset
 
       const lines = validText
-        .split('\\n')
+        .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0)
 

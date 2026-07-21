@@ -22,8 +22,9 @@ export class ChatlunaParser {
     if (!name || !content || !timestamp) return null
     if (!name.startsWith('chatluna') && !name.includes('chatluna')) return null
 
+    const cleanContent = content.replace(/\u001b\[[0-9;]*m/g, '')
     // Track the most recent model mention from search-service or adapter logs.
-    const modelMatch = /(?:Create summary model|\u4f7f\u7528\u6a21\u578b|model)\s*[:\uff1a]\s*(?<model>[^\n\r,]+)/i.exec(content)
+    const modelMatch = /(?:Create summary model|\u4f7f\u7528\u6a21\u578b|model)\s*[:\uff1a]\s*(?<model>[^\n\r,]+)/i.exec(cleanContent)
     if (modelMatch?.groups?.model) {
       this.lastModelId = modelMatch.groups.model.trim()
       this.lastModelTimestamp = timestamp
@@ -31,7 +32,7 @@ export class ChatlunaParser {
     }
 
     // Also capture adapter-specific model selections if present.
-    const adapterModelMatch = /(?:currentModel|selected model|modelId)\s*[:=]\s*(?<model>[A-Za-z0-9_./:-]+)/i.exec(content)
+    const adapterModelMatch = /(?:currentModel|selected model|modelId)\s*[:=]\s*(?<model>[A-Za-z0-9_./:-]+)/i.exec(cleanContent)
     if (adapterModelMatch?.groups?.model) {
       this.lastModelId = adapterModelMatch.groups.model.trim()
       this.lastModelTimestamp = timestamp
@@ -39,7 +40,7 @@ export class ChatlunaParser {
     }
 
     // Real ChatLuna usage line: "Token usage from API: input=N output=N total=N"
-    const usageMatch = /Token usage from API:\s*input\s*=\s*(?<input>\d+)\s+output\s*=\s*(?<output>\d+)\s+total\s*=\s*(?<total>\d+)/i.exec(content)
+    const usageMatch = /Token usage from API:\s*input\s*=\s*(?<input>\d+)\s+output\s*=\s*(?<output>\d+)\s+total\s*=\s*(?<total>\d+)/i.exec(cleanContent)
     if (usageMatch && usageMatch.groups) {
       const { input, output, total } = usageMatch.groups as { input: string; output: string; total: string }
       return this.buildRecord(timestamp, input, output, total)

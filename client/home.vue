@@ -1,11 +1,13 @@
 <template>
   <number-grid></number-grid>
+  <analytics-numbers></analytics-numbers>
   <div class="card-grid chart-grid"><k-slot name="analytic-chart"></k-slot></div>
 </template>
 
 <script lang="ts" setup>
 
 import NumberGrid from './numbers/index.vue'
+import AnalyticsNumbers from './numbers/analytics.vue'
 
 </script>
 
