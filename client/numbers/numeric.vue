@@ -3,7 +3,7 @@
     <k-icon :name="icon"/>
     <div class="content">
       <p class="title">{{ title }}</p>
-      <p class="value"><slot>-</slot></p>
+      <p class="value"><slot>{{ formatted }}</slot></p>
     </div>
     <template #footer v-if="$slots['footer-left']">
       <span class="left"><slot name="footer-left"></slot></span>
@@ -14,10 +14,20 @@
 
 <script lang="ts" setup>
 
-defineProps<{
+import { computed } from 'vue'
+
+const props = defineProps<{
   title: string
   icon: string
+  value?: number | string
+  unit?: string
 }>()
+
+const formatted = computed(() => {
+  if (props.value === undefined || props.value === null) return '-'
+  const v = typeof props.value === 'number' ? props.value.toLocaleString() : props.value
+  return props.unit ? `${v} ${props.unit}` : v
+})
 
 </script>
 

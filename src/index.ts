@@ -567,6 +567,16 @@ class Analytics extends DataService<Analytics.Payload> {
   }
 
   async download(): Promise<Analytics.Payload> {
+    try {
+      const result = await this.downloadInner()
+      return result
+    } catch (err) {
+      logger.error('analytics download failed', err)
+      throw err
+    }
+  }
+
+  private async downloadInner(): Promise<Analytics.Payload> {
     const messageByDateTask = this.getMessageByDate()
     const periodStatsTask = Promise.all(periods.map(async (days) => {
       return [days, await this.getPeriodStats(days)] as const
