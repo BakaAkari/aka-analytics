@@ -35,12 +35,15 @@ export class YesimbotParser {
   }
 
   private parseChatModel(modelId: string, content: string, timestamp: number, log: any): ParsedLogLine | null {
-    const id = this.buildId(timestamp, modelId, content)
+    // Use modelId as the pending key because Koishi log lines do not carry a
+    // stable request identifier. This preserves latency/first-token data from
+    // the start line to the finish line for the same model invocation.
+    const pendingKey = modelId
 
     // \uD83D\uDE80 [\u8bf7\u6c42\u5f00\u59cb] [\u6d41\u5f0f] \u6a21\u578b: modelId
     if (content.includes('\u8bf7\u6c42\u5f00\u59cb')) {
-      this.pendingRequests.set(id, {
-        id,
+      this.pendingRequests.set(pendingKey, {
+        id: this.buildId(timestamp, modelId, content),
         timestamp: new Date(timestamp),
         date: Time.getDateNumber(new Date(timestamp)),
         hour: new Date(timestamp).getHours(),
@@ -58,7 +61,7 @@ export class YesimbotParser {
     // \uD83C\uDF0A \u6d41\u5f0f\u4f20\u8f93\u5df2\u5f00\u59cb | \u5ef6\u8fdf: Nms
     const startMatch = /\uD83C\uDF0A \u6d41\u5f0f\u4f20\u8f93\u5df2\u5f00\u59cb \| \u5ef6\u8fdf: (?<latency>\d+)ms/.exec(content)
     if (startMatch) {
-      const req = this.pendingRequests.get(id)
+      const req = this.pendingRequests.get(pendingKey)
       if (req) req.firstTokenLatencyMs = Number(startMatch.groups.latency)
       return null
     }
@@ -66,10 +69,10 @@ export class YesimbotParser {
     // \uD83C\uDFC1 [\u6d41\u5f0f] \u4f20\u8f93\u5b8c\u6210 | \u603b\u8017\u65f6: Nms | \u8f93\u5165: N | \u8f93\u51fa: N
     const finishMatch = /\uD83C\uDFC1 \[(?<stream>\u6d41\u5f0f)\] \u4f20\u8f93\u5b8c\u6210 \| \u603b\u8017\u65f6: (?<duration>\d+)ms \| \u8f93\u5165: (?<prompt>\d+) \| \u8f93\u51fa: (?<completion>\d+)/.exec(content)
     if (finishMatch) {
-      const req = this.pendingRequests.get(id)
+      const req = this.pendingRequests.get(pendingKey)
       const record: AiRequestRecord = {
         ...(req || {
-          id,
+          id: this.buildId(timestamp, modelId, content),
           timestamp: new Date(timestamp),
           date: Time.getDateNumber(new Date(timestamp)),
           hour: new Date(timestamp).getHours(),
@@ -83,16 +86,16 @@ export class YesimbotParser {
         totalTokens: Number(finishMatch.groups.prompt) + Number(finishMatch.groups.completion),
         success: true,
       } as AiRequestRecord
-      this.pendingRequests.delete(id)
+      this.pendingRequests.delete(pendingKey)
       return { type: 'ai-request', record }
     }
 
     // \uD83D\uDCAC [\u6d41\u5f0f] \u6a21\u578b\u672a\u8f93\u51fa\u6709\u6548\u5185\u5bb9
     if (content.includes('\u6a21\u578b\u672a\u8f93\u51fa\u6709\u6548\u5185\u5bb9') || content.includes('OUTPUT_EMPTY_CONTENT')) {
-      const req = this.pendingRequests.get(id)
+      const req = this.pendingRequests.get(pendingKey)
       const record: AiRequestRecord = {
         ...(req || {
-          id,
+          id: this.buildId(timestamp, modelId, content),
           timestamp: new Date(timestamp),
           date: Time.getDateNumber(new Date(timestamp)),
           hour: new Date(timestamp).getHours(),
@@ -106,7 +109,7 @@ export class YesimbotParser {
         success: false,
         errorCode: 'OUTPUT_EMPTY_CONTENT',
       } as AiRequestRecord
-      this.pendingRequests.delete(id)
+      this.pendingRequests.delete(pendingKey)
       return { type: 'ai-request', record }
     }
 
