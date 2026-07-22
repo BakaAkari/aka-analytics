@@ -122,6 +122,8 @@ namespace Analytics {
     freeUsed: number
     purchasedUsed: number
     consumptionType: string
+    errorCode: string
+    latencyMs: number
   }
 
   export interface LogOffset {
@@ -329,6 +331,8 @@ class Analytics extends DataService<Analytics.Payload> {
       freeUsed: 'integer',
       purchasedUsed: 'integer',
       consumptionType: 'string(63)',
+      errorCode: 'string(127)',
+      latencyMs: 'integer',
     }, {
       primary: 'id',
     })
