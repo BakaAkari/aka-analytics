@@ -1,6 +1,6 @@
 {
   "name": "koishi-plugin-aka-analytics",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "Replacement analytics dashboard for Koishi, based on @koishijs/plugin-analytics.",
   "license": "AGPL-3.0",
   "type": "commonjs",
@@ -80,10 +80,12 @@
     "yakumo": "^3.2.1"
   },
   "scripts": {
-    "clean": "node -e \"for (const p of ['lib', 'dist']) require('fs').rmSync(p, { recursive: true, force: true })\"",
-    "build": "pnpm clean && tsc --project tsconfig.json && koishi-console build .",
-    "typecheck": "tsc --project tsconfig.json --noEmit",
-    "test": "tsc --project tsconfig.json && node --test test/**/*.test.mjs"
+    "clean": "node -e \"for (const p of ['lib', 'dist', 'tsconfig.tsbuildinfo']) require('fs').rmSync(p, { recursive: true, force: true })\"",
+    "build:server": "tsc --build tsconfig.json --force",
+    "build": "pnpm clean && pnpm build:server && koishi-console build .",
+    "prepack": "pnpm build && node scripts/verify-package-contents.cjs",
+    "typecheck": "tsc --project tsconfig.json --noEmit --incremental false --composite false",
+    "test": "pnpm clean && pnpm build:server && node --test test/**/*.test.mjs"
   },
   "publishConfig": {
     "access": "public"

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.3
+
+- 修复 `0.5.2` npm 包缺失后端 `lib/` 产物的问题：清理构建目录时同时删除 `tsconfig.tsbuildinfo`，避免 TypeScript 增量缓存错误跳过编译。
+- 新增发布内容强制校验：发布前必须存在 `lib/index.js`、`lib/services/log-ingestion-coordinator.js` 等当前后端产物，同时禁止旧 `log-watcher` / `historical-log-importer` 残留；任一条件不满足都会阻止打包发布。
+
 ## 0.5.2
 
 - 修复 npm 发布包可能混入旧 `lib/` 构建残留的问题；构建前强制清理 `lib` 与 `dist`，确保已删除的 `LogWatcher` / `HistoricalLogImporter` 不再出现在 tarball 中。运行逻辑与 0.5.1 一致。
