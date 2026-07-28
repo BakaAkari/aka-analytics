@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.5.2
+
+- 修复 npm 发布包可能混入旧 `lib/` 构建残留的问题；构建前强制清理 `lib` 与 `dist`，确保已删除的 `LogWatcher` / `HistoricalLogImporter` 不再出现在 tarball 中。运行逻辑与 0.5.1 一致。
+
 ## 0.5.1
 
 - **重构：日志采集稳定性**。生产 NAS 日志目录累积至约 34.9 万文件，旧实现每 10 秒起一轮 `readdir({withFileTypes: true})` 全量目录物化 + 每文件一次 `stat` + 全文件 `Buffer.alloc(size)`，多个轮次叠加导致 Node 堆内存爆炸、事件循环失联、HTTP 无响应。本次重构：
