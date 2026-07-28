@@ -19,58 +19,31 @@ export class YesimbotParser {
 
     if (!name || !content || !timestamp) return null
 
-    // [\u804a\u5929\u6a21\u578b] [modelId]
-    const chatModelMatch = /^\[\u804a\u5929\u6a21\u578b\] \[(?<model>[^\]]+)\]/.exec(name)
+    // [聊天模型] [modelId]
+    const chatModelMatch = /^\[聊天模型\] \[(?<model>[^\]]+)\]/.exec(name)
     if (chatModelMatch) {
       return this.parseChatModel(chatModelMatch.groups.model, content, timestamp, log)
     }
 
-    // [\u8bf7\u6c42\u6267\u884c\u5668]...
-    const executorMatch = /^\[\u8bf7\u6c42\u6267\u884c\u5668\]\[chat\]:\[(?<model>[^\]]+)\]/.exec(name)
+    // [请求执行器]...
+    const executorMatch = /^\[请求执行器\]\[chat\]:\[(?<model>[^\]]+)\]/.exec(name)
     if (executorMatch) {
       return this.parseExecutor(executorMatch.groups.model, content, timestamp)
     }
 
-    // [\u5fc3\u8df3\u5904\u7406\u5668] 💰 Token \u6d88\u8017 lines duplicate the
-    // per-model "传输完成" finish lines (same invocation logged twice).
-    // Skip them to avoid double counting.
-    if (name.startsWith('[\u5fc3\u8df3\u5904\u7406\u5668]')) {
+    // [心跳处理器] Token 消耗 lines duplicate the
+    // per-model 传输完成 finish line (same invocation logged twice from
+    // a different subsystem). Skip them: the finish line already carries
+    // latency and is authoritative. 0.5.0 stance — do NOT re-enable
+    // heartbeat parsing without also gating the finish-line branch off,
+    // or every request will be counted twice. The lastModelId /
+    // parseHeartbeatToken pair that previously lived here was
+    // unreachable dead code and has been removed.
+    if (name.startsWith('[心跳处理器]')) {
       return null
     }
 
     return null
-  }
-
-  /**
-   * Newer yesimbot versions log token usage from the heartbeat processor
-   * instead of the per-model finish line. These lines carry no model name,
-   * so attribute them to the most recently started pending chat request.
-   */
-  private lastModelId: string | null = null
-  private parseHeartbeatToken(content: string, timestamp: number): ParsedLogLine | null {
-    const m = /Token \u6d88\u8017 \| \u8f93\u5165: (?<prompt>\d+) \| \u8f93\u51fa: (?<completion>\d+)/.exec(content)
-    if (!m) return null
-    const modelId = this.lastModelId || 'unknown'
-    const prompt = Number(m.groups.prompt)
-    const completion = Number(m.groups.completion)
-    const req = this.pendingRequests.get(modelId)
-    const record: AiRequestRecord = {
-      ...(req || {
-        id: this.buildId(timestamp, modelId, content),
-        timestamp: new Date(timestamp),
-        date: Time.getDateNumber(new Date(timestamp)),
-        hour: new Date(timestamp).getHours(),
-        source: 'yesimbot',
-      } as AiRequestRecord),
-      modelId,
-      provider: this.inferProvider(modelId),
-      promptTokens: prompt,
-      completionTokens: completion,
-      totalTokens: prompt + completion,
-      success: true,
-    } as AiRequestRecord
-    this.pendingRequests.delete(modelId)
-    return { type: 'ai-request', record }
   }
 
   private parseChatModel(modelId: string, content: string, timestamp: number, log: any): ParsedLogLine | null {
@@ -79,9 +52,8 @@ export class YesimbotParser {
     // the start line to the finish line for the same model invocation.
     const pendingKey = modelId
 
-    // \uD83D\uDE80 [\u8bf7\u6c42\u5f00\u59cb] [\u6d41\u5f0f] \u6a21\u578b: modelId
-    if (content.includes('\u8bf7\u6c42\u5f00\u59cb')) {
-      this.lastModelId = modelId
+    // 🚀 [请求开始] [流式] 模型: modelId
+    if (content.includes('请求开始')) {
       this.pendingRequests.set(pendingKey, {
         id: this.buildId(timestamp, modelId, content),
         timestamp: new Date(timestamp),
@@ -98,16 +70,16 @@ export class YesimbotParser {
       return null
     }
 
-    // \uD83C\uDF0A \u6d41\u5f0f\u4f20\u8f93\u5df2\u5f00\u59cb | \u5ef6\u8fdf: Nms
-    const startMatch = /\uD83C\uDF0A \u6d41\u5f0f\u4f20\u8f93\u5df2\u5f00\u59cb \| \u5ef6\u8fdf: (?<latency>\d+)ms/.exec(content)
+    // 🌊 流式传输已开始 | 延迟: Nms
+    const startMatch = /🌊 流式传输已开始 \| 延迟: (?<latency>\d+)ms/.exec(content)
     if (startMatch) {
       const req = this.pendingRequests.get(pendingKey)
       if (req) req.firstTokenLatencyMs = Number(startMatch.groups.latency)
       return null
     }
 
-    // \uD83C\uDFC1 [\u6d41\u5f0f] \u4f20\u8f93\u5b8c\u6210 | \u603b\u8017\u65f6: Nms | \u8f93\u5165: N | \u8f93\u51fa: N
-    const finishMatch = /\uD83C\uDFC1 \[(?<stream>\u6d41\u5f0f)\] \u4f20\u8f93\u5b8c\u6210 \| \u603b\u8017\u65f6: (?<duration>\d+)ms \| \u8f93\u5165: (?<prompt>\d+) \| \u8f93\u51fa: (?<completion>\d+)/.exec(content)
+    // 🏁 [流式] 传输完成 | 总耗时: Nms | 输入: N | 输出: N
+    const finishMatch = /🏁 \[(?<stream>流式)\] 传输完成 \| 总耗时: (?<duration>\d+)ms \| 输入: (?<prompt>\d+) \| 输出: (?<completion>\d+)/.exec(content)
     if (finishMatch) {
       const req = this.pendingRequests.get(pendingKey)
       const record: AiRequestRecord = {
@@ -130,8 +102,8 @@ export class YesimbotParser {
       return { type: 'ai-request', record }
     }
 
-    // \uD83D\uDCAC [\u6d41\u5f0f] \u6a21\u578b\u672a\u8f93\u51fa\u6709\u6548\u5185\u5bb9
-    if (content.includes('\u6a21\u578b\u672a\u8f93\u51fa\u6709\u6548\u5185\u5bb9') || content.includes('OUTPUT_EMPTY_CONTENT')) {
+    // 💬 [流式] 模型未输出有效内容
+    if (content.includes('模型未输出有效内容') || content.includes('OUTPUT_EMPTY_CONTENT')) {
       const req = this.pendingRequests.get(pendingKey)
       const record: AiRequestRecord = {
         ...(req || {
@@ -157,9 +129,9 @@ export class YesimbotParser {
   }
 
   private parseExecutor(modelId: string, content: string, timestamp: number): ParsedLogLine | null {
-    if (!content.includes('\u8bf7\u6c42\u5931\u8d25')) return null
+    if (!content.includes('请求失败')) return null
 
-    const errorMatch = /\u9519\u8bef: (?<error>.+)$/.exec(content)
+    const errorMatch = /错误: (?<error>.+)$/.exec(content)
     const id = this.buildId(timestamp, modelId, content)
     const record: AiRequestRecord = {
       id,

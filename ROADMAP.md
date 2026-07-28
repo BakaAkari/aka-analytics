@@ -57,7 +57,45 @@
 - 保留七日周期，并新增三十日、九十日周期。
 - 默认统计窗口调整为九十日，覆盖当前全部可选周期。
 
+## 0.5.1 日志采集稳定性重构
+
+状态：已完成并通过旧 SQLite 数据库兼容启动验证。
+
+目标：
+
+- 解决 34 万级 `data/logs` 目录导致 Koishi 事件循环 stall / HTTP 无响应的生产故障。
+- 引入 `LogIngestionCoordinator` 单飞调度、`opendir` 有界发现、字节精确的流式读取。
+- 引入 `analytics.log_import_state` 历史导入状态机，替代「offset 表非空即完成」的粗糙判定。
+- 历史导入默认策略 `recent`，仅回填最近 30 天；`full` 需显式启用。
+- 每日聚合改为按受影响日期从原始 `analytics.ai_request` 表整体重算，重放幂等。
+- 详见 `docs/log-ingestion-stability.md`。
+
+非目标：
+
+- 不改变前端图表与统计口径。
+- 不改变现有原始表主键。
+- 不注册 Koishi `Logger.Target` 直接接管实时事件（留给 0.6.0）。
+
+## 0.6.0 Logger Target 直接输入（预留）
+
+状态：待评估，尚未开始。
+
+方向：
+
+- 在 aka-analytics 内注册一个 Koishi `Logger.Target`（或等价的 in-process hook），将 yesimbot / chat-luna / aka-ai-image-generator 的日志事件直接送入 `LogRecordProcessor`，让统计不再依赖磁盘日志轮询。
+- 磁盘轮询仍保留，作为历史导入与故障回填通路。
+- 需要额外处理 target 内部循环日志（aka-analytics 自身日志不能进入被统计通道）。
+
+## 历史版本
+
+- `0.1.0`：官方 analytics 替代基线。
+- `0.2.0`：将「各平台消息占比」替换为「用户用量排行」。
+- `0.2.1`：Lark 用户名显示。
+- `0.3.0`：多周期切换。
+- `0.3.1`：周期口径调整（保留 7/30/90 日）。
+- `0.4.6`：偏移表更名为 `analytics.log_offset_v2` 以避免 `42P10` upsert 失败。
+- `0.5.0`：token 统计双计数修复、aggregate 竞态修复、welcome 页图表整合。
+
 ## 后续版本候选
 
-- `0.4.0`：接入 `aka-ai-image-generator` 用量事件与积分流水。
-- `0.5.0`：新增独立 Analytics 页面，保留首页摘要卡片。
+- 独立 Analytics 页面，保留首页摘要卡片。

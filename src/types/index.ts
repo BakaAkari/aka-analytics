@@ -53,13 +53,84 @@ export interface ImageGenerationRecord {
   purchasedUsed?: number
   consumptionType?: 'free' | 'purchased' | 'mixed' | 'unknown'
   errorCode?: string
+  latencyMs?: number
 }
 
-export interface LogOffsetRecord {
+/**
+ * Legacy v2 on-disk shape (from 0.4.6 / 0.5.0). Preserved so existing
+ * databases do not need a schema rebuild on upgrade. New code should
+ * not construct this directly; use `LogOffsetRecord` (v3) instead.
+ */
+export interface LogOffsetV2Record {
   fileName: string
   size: number
   lastOffset: number
   updatedAt: Date
+}
+
+/**
+ * Current in-memory offset record. Backed by `analytics.log_offset_v3`
+ * on disk. When a file only has a v2 legacy row, the service materialises
+ * this shape with `mtimeMs = 0` for the fallback.
+ */
+export interface LogOffsetRecord {
+  fileName: string
+  size: number
+  lastOffset: number
+  mtimeMs: number
+  updatedAt: Date
+}
+
+/** Alias — v3 == the current canonical record. Kept for call-site clarity. */
+export type LogOffsetV3Record = LogOffsetRecord
+
+/**
+ * Cross-process pending-recompute marker for AI daily aggregates. When a raw
+ * ai_request row is upserted, the date is written here BEFORE offset commit.
+ * Recompute deletes the row only after the corresponding date's daily
+ * aggregate has been rebuilt from raw. A process crash between raw upsert
+ * and next recompute leaves the marker on disk so the retry still runs.
+ */
+export interface AiDailyDirtyRecord {
+  date: number
+  updatedAt: Date
+}
+
+export type IngestionStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed'
+
+export interface IngestionStateRecord {
+  key: string
+  status: IngestionStatus
+  cursorFileName: string
+  processedFiles: number
+  processedBytes: number
+  importedAiRecords: number
+  importedImageRecords: number
+  startedAt: Date
+  updatedAt: Date
+  completedAt: Date
+  /**
+   * When the current consecutive failure streak started. Reset to EPOCH
+   * when a successful cycle observes running/completed state. Used with
+   * `nextRetryAt` and `consecutiveFailures` to implement bounded retry
+   * of transient discover/process failures.
+   */
+  failedAt: Date
+  /**
+   * Wall-clock at which a `failed` state may be reverted to `running`
+   * and retried. Persisted so a restart survives the backoff — a fresh
+   * process must not busy-loop against a broken directory. Value is
+   * `EPOCH` when there is no scheduled retry (idle / running /
+   * completed / paused states).
+   */
+  nextRetryAt: Date
+  /**
+   * Number of consecutive failures in the current streak, used to grow
+   * the retry interval. Reset to 0 on the first successful cycle after
+   * a recovery.
+   */
+  consecutiveFailures: number
+  lastError: string
 }
 
 export interface ParsedLogLine {

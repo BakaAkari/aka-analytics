@@ -2,11 +2,10 @@ import { $, Context, deepEqual, Dict, Logger, pick, Query, Row, Schema, Session,
 import { DataService } from '@koishijs/console'
 import { resolve } from 'path'
 import { Config } from './config'
-import { LogWatcher } from './services/log-watcher'
 import { AiRequestService } from './services/ai-request-service'
 import { ImageGenerationService } from './services/image-generation-service'
 import { AggregationService } from './services/aggregation-service'
-import { HistoricalLogImporter } from './services/historical-log-importer'
+import { LogIngestionCoordinator } from './services/log-ingestion-coordinator'
 import type { AiStats, ImageStats } from './services/aggregation-service'
 
 declare module 'koishi' {
@@ -17,7 +16,10 @@ declare module 'koishi' {
     'analytics.ai_request': Analytics.AiRequest
     'analytics.ai_model_daily': Analytics.AiModelDaily
     'analytics.image_generation': Analytics.ImageGeneration
-    'analytics.log_offset_v2': Analytics.LogOffset
+    'analytics.log_offset_v2': Analytics.LogOffsetV2
+    'analytics.log_offset_v3': Analytics.LogOffsetV3
+    'analytics.log_import_state': Analytics.LogImportState
+    'analytics.ai_daily_dirty': Analytics.AiDailyDirty
   }
 }
 
@@ -126,10 +128,51 @@ namespace Analytics {
     latencyMs: number
   }
 
-  export interface LogOffset {
+  /**
+   * Legacy offset table. Kept intact with its original 4 int columns so
+   * databases created by 0.5.0 (and earlier) do not trigger a Minato
+   * schema rebuild on upgrade — the rebuild fails when the temp table
+   * has a different column count than the source. See CHANGELOG 0.5.1.
+   */
+  export interface LogOffsetV2 {
     fileName: string
     size: number
     lastOffset: number
+    updatedAt: Date
+  }
+
+  /**
+   * New offset table introduced in 0.5.1. Uses `double` for byte columns
+   * (multi-GB log files no longer overflow int32) and adds `mtimeMs` so
+   * the coordinator can detect same-name-but-rewritten rotations.
+   */
+  export interface LogOffsetV3 {
+    fileName: string
+    size: number
+    lastOffset: number
+    mtimeMs: number
+    updatedAt: Date
+  }
+
+  export interface LogImportState {
+    key: string
+    status: string
+    cursorFileName: string
+    processedFiles: number
+    processedBytes: number
+    importedAiRecords: number
+    importedImageRecords: number
+    startedAt: Date
+    updatedAt: Date
+    completedAt: Date
+    failedAt: Date
+    nextRetryAt: Date
+    consecutiveFailures: number
+    lastError: string
+  }
+
+  export interface AiDailyDirty {
+    date: number
     updatedAt: Date
   }
 
@@ -182,8 +225,7 @@ class Analytics extends DataService<Analytics.Payload> {
   private aiRequestService: AiRequestService
   private imageGenerationService: ImageGenerationService
   private aggregationService: AggregationService
-  private logWatcher: LogWatcher
-  private historicalImporter: HistoricalLogImporter
+  private ingestionCoordinator: LogIngestionCoordinator
 
   constructor(ctx: Context, public config: Config) {
     super(ctx, 'analytics')
@@ -227,11 +269,17 @@ class Analytics extends DataService<Analytics.Payload> {
     this.aiRequestService = new AiRequestService(ctx, logger)
     this.imageGenerationService = new ImageGenerationService(ctx, logger)
     this.aggregationService = new AggregationService(ctx, config, logger)
-    this.logWatcher = new LogWatcher(ctx, config, logger, this.aiRequestService, this.imageGenerationService)
-    this.historicalImporter = new HistoricalLogImporter(ctx, config, logger, this.aiRequestService, this.imageGenerationService)
+    this.ingestionCoordinator = new LogIngestionCoordinator(
+      ctx,
+      config,
+      logger,
+      this.aiRequestService,
+      this.imageGenerationService,
+    )
+    this.ingestionCoordinator.start()
 
-    ctx.on('ready', async () => {
-      await this.historicalImporter.runIfNeeded()
+    ctx.on('dispose', () => {
+      this.ingestionCoordinator.dispose()
     })
 
     ctx.console.addEntry({
@@ -337,6 +385,12 @@ class Analytics extends DataService<Analytics.Payload> {
       primary: 'id',
     })
 
+    // v2 kept at its ORIGINAL 0.4.6/0.5.0 shape (4 int columns, no
+    // mtimeMs). Existing production databases already contain this table;
+    // changing its column count or types would make Minato attempt a
+    // temp-table copy on startup that fails ("N columns but M values
+    // supplied"). New reads/writes go to log_offset_v3 (below); v2 is
+    // consulted only as a read-only fallback for rows that pre-date v3.
     ctx.model.extend('analytics.log_offset_v2', {
       fileName: 'string(255)',
       size: 'integer',
@@ -344,6 +398,44 @@ class Analytics extends DataService<Analytics.Payload> {
       updatedAt: 'timestamp',
     }, {
       primary: 'fileName',
+    })
+
+    ctx.model.extend('analytics.log_offset_v3', {
+      fileName: 'string(255)',
+      // Bytes and mtimeMs use double so they survive files/directories
+      // larger than 2 GB (u32/int32 would silently overflow).
+      size: 'double',
+      lastOffset: 'double',
+      mtimeMs: 'double',
+      updatedAt: 'timestamp',
+    }, {
+      primary: 'fileName',
+    })
+
+    ctx.model.extend('analytics.ai_daily_dirty', {
+      date: 'integer',
+      updatedAt: 'timestamp',
+    }, {
+      primary: 'date',
+    })
+
+    ctx.model.extend('analytics.log_import_state', {
+      key: 'string(63)',
+      status: 'string(31)',
+      cursorFileName: 'string(255)',
+      processedFiles: 'integer',
+      processedBytes: 'double',
+      importedAiRecords: 'integer',
+      importedImageRecords: 'integer',
+      startedAt: 'timestamp',
+      updatedAt: 'timestamp',
+      completedAt: 'timestamp',
+      failedAt: 'timestamp',
+      nextRetryAt: 'timestamp',
+      consecutiveFailures: 'integer',
+      lastError: 'string(1023)',
+    }, {
+      primary: 'key',
     })
   }
 

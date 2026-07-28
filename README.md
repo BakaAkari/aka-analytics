@@ -28,15 +28,41 @@
 - 增加成功 / 失败、异常增长、活跃趋势等运营指标。
 - 接入 AI / ChatLuna / 图像生成模型用量、模型占比、积分消耗、用户排行等业务统计。
 
+## 日志采集配置（0.5.1 起）
+
+`aka-analytics` 通过轮询 Koishi `data/logs/` 目录下的 `YYYY-MM-DD-N.log` 文件采集 yesimbot、chat-luna、aka-ai-image-generator 的运行日志。当日志目录累积到十万到百万级文件时，粗糙的实现会导致 Koishi 事件循环 stall。0.5.1 起采用有界发现 + 流式读取 + 状态机，可安全应对 34 万级目录。
+
+主要可调项（均可在 Koishi Console 插件设置面板中修改）：
+
+| 配置 | 默认 | 说明 |
+| ---- | ---- | ---- |
+| `logWatchInterval` | 60 秒 | 每轮扫描间隔，最小 5 秒。 |
+| `maxRecentFiles` | 64 | 实时扫描保留的最近文件数上限（`opendir` 迭代过程中的候选集大小）。 |
+| `maxHistoricalFilesPerBatch` | 500 | 单次历史导入批次的文件数。 |
+| `maxBytesPerFilePerCycle` | 8 MiB | 单文件单轮读取的最大字节数。 |
+| `logReadChunkBytes` | 1 MiB | `fd.read` 单次分配的缓冲区大小。 |
+| `logReadBatchLines` | 1000 | 单文件单轮生成的最大行数。 |
+| `maxScanDuration` | 120 秒 | 目录发现阶段的软性超时，超时后本轮返回 partial 结果。 |
+| `historicalImportMode` | `recent` | 历史导入策略：`disabled` / `recent` / `full`（`full` 会扫描整个目录，谨慎启用）。 |
+| `historicalImportDays` | 30 | `recent` 模式覆盖的天数。 |
+
+历史导入使用独立的 `analytics.log_import_state` 表记录状态（`idle` / `running` / `paused` / `completed` / `failed`），完成后不会再自动重跑；如需重新导入请手工清空该表的 `historical` 行。每日聚合按受影响日期从 `analytics.ai_request` 原始表整体重算，因此 offset 提交失败后的重放不会造成 `ai_model_daily` 双计。
+
+极端目录（34 万文件级别）下已知延迟：
+
+- 单轮实时扫描的 `opendir` 迭代仍会耗时（数十秒到一分钟量级），但事件循环仍可响应；`maxScanDuration` 达到软性超时时会返回 partial 结果而不是无限等待。
+- 历史导入默认只回填 30 天窗口；`full` 模式下每 60 秒完成一批 500 个文件，34 万级目录需要多个小时才能全部完成（可接受，因为运行时并不 block）。
+
 ## 本地开发
 
 ```sh
 pnpm install
 pnpm typecheck
 pnpm build
+pnpm test
 ```
 
-首版依赖 `yakumo` 构建 Console 前端，构建产物输出到 `lib/` 与 `dist/`。
+首版依赖 `yakumo` 构建 Console 前端，构建产物输出到 `lib/` 与 `dist/`。测试使用内置 `node:test`，不引入额外重型框架。
 
 ## 发布边界
 

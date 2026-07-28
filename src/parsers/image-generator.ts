@@ -82,6 +82,16 @@ export class ImageGeneratorParser {
     const pending = this.pending.get(provider) || {}
     // Only attach command context if it happened within the last 2 minutes
     const fresh = timestamp - this.lastCommandTs < 120_000
+    // NOTE on styleName: aka-ai-image-generator's `requestProviderImages`
+    // log currently records only supplier / provider / modelId /
+    // modelSource / numImages / imageUrlsCount / resolution /
+    // aspectRatio — no real style identifier. Aliasing the command name
+    // as styleName would fabricate a dimension. Leave styleName
+    // undefined; the aggregation service already falls back to
+    // commandName (and then 'unknown') when computing the style
+    // ranking, so no chart data disappears. If the upstream plugin
+    // starts emitting a real style, parse it here and populate the
+    // field for real.
     const record: ImageGenerationRecord = {
       id: `img-${timestamp}-${provider}-${success ? 'ok' : 'fail'}`,
       timestamp: new Date(timestamp),
@@ -90,7 +100,7 @@ export class ImageGeneratorParser {
       userId: fresh ? this.lastUser : undefined,
       platform: fresh ? this.lastPlatform : undefined,
       commandName: fresh ? this.lastCommand : undefined,
-      styleName: fresh ? this.lastCommand : undefined,
+      styleName: undefined,
       modelId: pending.modelId,
       provider,
       numImages: pending.numImages || 1,
