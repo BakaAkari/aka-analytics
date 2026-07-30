@@ -282,6 +282,14 @@ class Analytics extends DataService<Analytics.Payload> {
       this.ingestionCoordinator.dispose()
     })
 
+    ctx.command('aka-analytics.reset-historical', '重置历史日志导入状态（下一轮扫描按当前配置重新导入）')
+      .alias('analytics.reset-historical')
+      .action(async () => {
+        const result = await this.ingestionCoordinator.resetHistoricalImport()
+        if (result === 'busy') return '日志扫描正在进行中，重置未执行，请稍后重试。'
+        return '历史导入状态已重置。下一轮扫描将按当前 historicalImportMode 配置重新导入。'
+      })
+
     ctx.console.addEntry({
       dev: resolve(__dirname, '../client/index.ts'),
       prod: resolve(__dirname, '../dist'),

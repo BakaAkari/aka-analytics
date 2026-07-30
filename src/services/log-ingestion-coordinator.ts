@@ -233,6 +233,30 @@ export class LogIngestionCoordinator {
     await this.tick('manual')
   }
 
+  /**
+   * Reset the persistent historical-import state so the next tick re-runs
+   * the import under the current `historicalImportMode` configuration.
+   *
+   * Returns 'busy' without touching anything when a scan cycle is in
+   * flight: a running historical batch patches the state row (with its
+   * old cursor) on completion, which would silently overwrite a reset
+   * issued mid-cycle and leave the operator believing a re-import was
+   * scheduled when it was not. Callers should retry once the cycle ends.
+   */
+  async resetHistoricalImport(): Promise<'ok' | 'busy'> {
+    if (this.running) return 'busy'
+    await this.state.resetHistorical()
+    // Drop the in-flight historical discovery session; its cursor no
+    // longer matches the reset state, and the next tick would otherwise
+    // keep advancing the stale iterator.
+    if (this.historicalDiscovery) {
+      await this.historicalDiscovery.dispose().catch(() => { /* ignore */ })
+      this.historicalDiscovery = null
+      this.historicalDiscoveryCursor = null
+    }
+    return 'ok'
+  }
+
   private async tick(source: 'interval' | 'ready' | 'manual'): Promise<void> {
     if (this.disposed) return
     if (this.running) {

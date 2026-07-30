@@ -14,7 +14,6 @@ const BASE_CONFIG = {
   enableAiStats: true,
   enableImageStats: true,
   chatlunaDefaultModel: 'default/model',
-  chatlunaTokenPerChar: 0.25,
   trackedSources: { yesimbot: true, 'image-generator': true, 'chat-luna': true },
   maxRecentFiles: 16,
   maxHistoricalFilesPerBatch: 4,
@@ -255,6 +254,72 @@ test('coordinator: live discovery keeps only maxRecentFiles', async () => {
     assert.equal(offsets.length, 2, 'only the newest 2 files were opened this cycle')
     const names = offsets.map(o => o.fileName).sort()
     assert.deepEqual(names, ['2025-06-01-6.log', '2025-06-01-7.log'])
+    coord.dispose()
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+
+test('coordinator: resetHistoricalImport returns busy while a scan is running', async () => {
+  const base = await setupDir()
+  try {
+    await seedYesimbotFile(join(base, 'logs', '2025-06-01-0.log'), 1)
+    const ctx = new FakeContext({ baseDir: base })
+    const logger = new FakeLogger()
+    const ai = new AiRequestService(ctx, logger)
+    const img = new ImageGenerationService(ctx, logger)
+    const coord = new LogIngestionCoordinator(ctx, BASE_CONFIG, logger, ai, img)
+
+    // tick() sets running=true synchronously before its first await, so a
+    // reset issued immediately after starting a tick must be refused.
+    const active = coord.runOnceForTest()
+    const result = await coord.resetHistoricalImport()
+    assert.equal(result, 'busy')
+    await active
+
+    // The refused reset must not have touched the state row.
+    const state = (await ctx.database.get('analytics.log_import_state', { key: 'historical' }))[0]
+    assert.notEqual(state.status, 'idle', 'busy reset must not reset state mid-cycle')
+    coord.dispose()
+  } finally {
+    await rm(base, { recursive: true, force: true })
+  }
+})
+
+test('coordinator: resetHistoricalImport restarts a completed historical import', async () => {
+  const base = await setupDir()
+  try {
+    await seedYesimbotFile(join(base, 'logs', '2025-06-01-0.log'), 3)
+    const ctx = new FakeContext({ baseDir: base })
+    const logger = new FakeLogger()
+    const ai = new AiRequestService(ctx, logger)
+    const img = new ImageGenerationService(ctx, logger)
+    const coord = new LogIngestionCoordinator(ctx, BASE_CONFIG, logger, ai, img)
+
+    // Drive the import to completion (batch tick + empty-discovery tick).
+    await coord.runOnceForTest()
+    await coord.runOnceForTest()
+    let state = (await ctx.database.get('analytics.log_import_state', { key: 'historical' }))[0]
+    assert.equal(state.status, 'completed')
+
+    const result = await coord.resetHistoricalImport()
+    assert.equal(result, 'ok')
+    state = (await ctx.database.get('analytics.log_import_state', { key: 'historical' }))[0]
+    assert.equal(state.status, 'idle')
+    assert.equal(state.cursorFileName, '')
+    assert.equal(state.processedFiles, 0)
+
+    // Next tick re-runs the import from scratch; raw records stay
+    // de-duplicated by primary key so the re-import is harmless.
+    await coord.runOnceForTest()
+    state = (await ctx.database.get('analytics.log_import_state', { key: 'historical' }))[0]
+    assert.equal(state.status, 'running')
+    assert.equal(state.processedFiles, 1, 're-import re-advanced the cursor over the file')
+    const raw = await ctx.database.get('analytics.ai_request', {})
+    assert.equal(raw.length, 3, 're-import did not duplicate raw records')
+    const daily = await ctx.database.get('analytics.ai_model_daily', {})
+    assert.equal(daily[0].requestCount, 3, 'aggregation still correct after re-import')
     coord.dispose()
   } finally {
     await rm(base, { recursive: true, force: true })

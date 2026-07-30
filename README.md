@@ -46,7 +46,7 @@
 | `historicalImportMode` | `recent` | 历史导入策略：`disabled` / `recent` / `full`（`full` 会扫描整个目录，谨慎启用）。 |
 | `historicalImportDays` | 30 | `recent` 模式覆盖的天数。 |
 
-历史导入使用独立的 `analytics.log_import_state` 表记录状态（`idle` / `running` / `paused` / `completed` / `failed`），完成后不会再自动重跑；如需重新导入请手工清空该表的 `historical` 行。每日聚合按受影响日期从 `analytics.ai_request` 原始表整体重算，因此 offset 提交失败后的重放不会造成 `ai_model_daily` 双计。
+历史导入使用独立的 `analytics.log_import_state` 表记录状态（`idle` / `running` / `paused` / `completed` / `failed`），完成后不会再自动重跑；如需重新导入，执行指令 `aka-analytics.reset-historical`（alias `analytics.reset-historical`）重置状态行，下一轮扫描即按当前 `historicalImportMode` 配置重新导入（扫描进行中会拒绝重置并提示稍后重试）；也可以手工清空该表的 `historical` 行。每日聚合按受影响日期从 `analytics.ai_request` 原始表整体重算，因此 offset 提交失败后的重放不会造成 `ai_model_daily` 双计。
 
 极端目录（34 万文件级别）下已知延迟：
 

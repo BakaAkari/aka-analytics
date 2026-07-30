@@ -71,15 +71,21 @@ export class LogRecordProcessor {
     if (!source) return null
     if (!this.config.trackedSources?.[source]) return null
 
-    if (source === 'yesimbot' && this.config.enableAiStats) {
+    if (source === 'yesimbot') {
       // [世界状态] command-invocation lines feed the image parser's
       // command-context tracking (user / style attribution). This is the
       // ONLY place the coupling is applied so live + historical behave
-      // identically.
-      if (typeof name === 'string' && name.startsWith('[世界状态]')) {
+      // identically. The feed powers IMAGE records, so it is gated on
+      // enableImageStats — previously it sat behind enableAiStats, which
+      // silently dropped image attribution whenever AI stats were
+      // disabled but image stats were on.
+      if (this.config.enableImageStats && typeof name === 'string' && name.startsWith('[世界状态]')) {
         this.imageGeneratorParser.parse(log)
       }
-      return this.yesimbotParser.parse(log)
+      if (this.config.enableAiStats) {
+        return this.yesimbotParser.parse(log)
+      }
+      return null
     }
     if (source === 'chat-luna' && this.config.enableAiStats) {
       return this.chatlunaParser.parse(log)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.4
+
+- 修复：`[世界状态]` 指令上下文馈送改挂 `enableImageStats`。此前该馈送位于 `enableAiStats` 分支内，`enableAiStats=false && enableImageStats=true` 时图像记录静默丢失用户 / 指令归因。两个开关语义现在各自独立。
+- 修复：删除从未被代码使用的死配置 `chatlunaTokenPerChar`（设置面板不再显示该项；已有配置中的残留键无害）。
+- 新增：指令 `aka-analytics.reset-historical`（alias `analytics.reset-historical`），重置历史导入状态后下一轮扫描按当前 `historicalImportMode` 重新导入；扫描进行中会拒绝重置并提示稍后重试，避免在途批次回写覆盖重置结果。`LogIngestionCoordinator` 新增 `resetHistoricalImport()` 承接该操作。
+- 测试：新增 4 项用例（image 上下文开关归属 ×2、reset busy 拒绝、reset 后重导入幂等），总计 61 项。
+
 ## 0.5.3
 
 - 修复 `0.5.2` npm 包缺失后端 `lib/` 产物的问题：清理构建目录时同时删除 `tsconfig.tsbuildinfo`，避免 TypeScript 增量缓存错误跳过编译。
